@@ -5,8 +5,8 @@ A Python-based tool to forward messages from public Telegram channels to Discord
 ## Features
 
 - No Telegram or Discord Bots required
-- Forward messages from multiple Telegram channels
-- Crediting the message source using message link as Embed Title, Channel Name and Icon Webhook and Embed Author.
+- Forward messages from multiple Telegram channels to Discord
+- Automated message source crediting in embeds
 - Preserve message formatting (bold, italic, links, code blocks, etc.)
 - Support for images and text content
 - Automatic handling of missing messages
@@ -41,7 +41,7 @@ pip install -r requirements.txt
    - Adjust `COOLDOWN` if needed (default: 300 seconds)
    - Customize `EMBED_COLOR` if desired
 
-2. (Optional) Initialize `webhook_logs.txt` with specific message IDs to start forwarding from particular points
+2. (Optional) Initialize `webhook_logs.log` with specific message IDs to start forwarding from particular points
 
 ## Usage
 
