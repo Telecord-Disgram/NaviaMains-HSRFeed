@@ -17,13 +17,13 @@ def log_message(message, log_type="info"):
 
     # Log only specific types of messages to the log file
     if log_type in ["error", "new_message", "status"]:
-        with open("webhook_logs.log", "a") as log_file:
+        with open("Disgram.log", "a") as log_file:
             log_file.write(log_entry + "\n")
 
 # Checks if a specific message (channel and message number) is already logged
 def is_message_logged(channel, number):
     try:
-        with open("webhook_logs.log", "r") as log_file:
+        with open("Disgram.log", "r") as log_file:
             for line in log_file:
                 # Match channel and message number
                 match = re.search(rf"https://t.me/{channel}/(\d+)", line)
