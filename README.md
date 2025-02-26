@@ -66,6 +66,7 @@ The bot maintains logs in `webhook_logs.log` with the following information:
 - The bot only works with public Telegram channels
 - Messages are fetched from Telegram's public preview page (https://t.me/s/{channel})
 - Discord webhook rate limits are handled automatically
+- Image quality of compressed images is too low to scrap from preview page. Use Telegram app for higher quality.
 - The bot can not parse messages with following content for now:
   - Uncompressed Images
   - Videos
