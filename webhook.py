@@ -13,7 +13,9 @@ from discord import SyncWebhook, Embed, File
 def log_message(message, log_type="info"):
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_entry = f"{timestamp} {message}"
+
     print(log_entry)
+
     if log_type in ["error", "new_message", "status"]:
         with open("Disgram.log", "a") as log_file:
             log_file.write(log_entry + "\n")
@@ -103,28 +105,8 @@ def getImage(tg_box):
     if msg_image:
         startIndex = msg_image['style'].find("background-image:url('") + 22
         endIndex = msg_image['style'].find(".jpg')") + 4
-        if startIndex > 21 and endIndex > 3:
-            return msg_image['style'][startIndex:endIndex]
+        return msg_image['style'][startIndex:endIndex]
     return None
-
-def getGroupedImages(tg_box):
-    grouped_images = []
-    grouped_wrap = tg_box.find('div', {'class': 'tgme_widget_message_grouped_wrap js-message_grouped_wrap'})
-    
-    if not grouped_wrap:
-        return grouped_images
-    
-    image_wraps = grouped_wrap.find_all('a', {'class': 'tgme_widget_message_photo_wrap grouped_media_wrap'})
-    
-    for img_wrap in image_wraps:
-        if 'style' in img_wrap.attrs and 'background-image:url' in img_wrap['style']:
-            startIndex = img_wrap['style'].find("background-image:url('") + 22
-            endIndex = img_wrap['style'].find("')") 
-            if startIndex > 21 and endIndex > 0:
-                img_url = img_wrap['style'][startIndex:endIndex]
-                grouped_images.append(img_url)
-    
-    return grouped_images
 
 def getTimestamp(tg_box):
     time_element = tg_box.find('time', {'datetime': True})
@@ -159,80 +141,46 @@ def download_image(image_url):
                 log_message("Max retries reached. Unable to download image.", log_type="error")
                 return None, None
 
-def sendMessage(msg_link, msg_text, images, author_name, icon_url, timestamp=None):
+def sendMessage(msg_link, msg_text, msg_image, author_name, icon_url, timestamp=None):
     max_retries = 5
     retry_delay = 2
-
-    if isinstance(images, str):
-        images = [images]
-
-    if not images:
-        images = []
-
-    files = []
-    image_filenames = []
     
-    for img_url in images:
-        image_data, image_filename = download_image(img_url)
-        if image_data and image_filename:
-            files.append(File(image_data, filename=image_filename))
-            image_filenames.append(image_filename)
-
-    image_groups = [image_filenames[i:i+4] for i in range(0, len(image_filenames), 4)]
+    image_data = None
+    image_filename = None
+    
+    if msg_image:
+        image_data, image_filename = download_image(msg_image)
     
     for attempt in range(max_retries):
         try:
             webhook = SyncWebhook.from_url(WEBHOOK_URL)
             
-            if not msg_text and not files:
-                log_message("No parseable content to send. Sending message link", log_type="error")
-                webhook.send(username=author_name, avatar_url=icon_url, 
-                            content=f"Unable to parse the message due to attached media and/or document. [Message Link]({msg_link})")
-                return
-            
-            log_message(f"Sending message to Discord: {msg_link}", log_type="new_message")
-
-            if len(image_groups) <= 1:
+            if msg_text or image_data:
                 embed = Embed(title='Message Link', url=msg_link, color=EMBED_COLOR, timestamp=timestamp)
                 
                 if msg_text:
                     embed.description = msg_text
                 
                 embed.set_author(name=author_name, icon_url=icon_url, url=msg_link)
-
-                if image_filenames:
-                    embed.set_image(url=f"attachment://{image_filenames[0]}")
                 
-                webhook.send(username=author_name, avatar_url=icon_url, embed=embed, files=files)
+                files = []
+                if image_data and image_filename:
+                    file = File(image_data, filename=image_filename)
+                    files.append(file)
+                    embed.set_image(url=f"attachment://{image_filename}")
+                
+                log_message(f"Sending message to Discord: {msg_link}", log_type="new_message")
+                
+                if files:
+                    webhook.send(username=author_name, avatar_url=icon_url, embed=embed, files=files)
+                else:
+                    webhook.send(username=author_name, avatar_url=icon_url, embed=embed)
+                
+                log_message("Message sent successfully.", log_type="new_message")
             else:
-                embeds = []
-
-                main_embed = Embed(title='Message Link', url=msg_link, color=EMBED_COLOR, timestamp=timestamp)
-                if msg_text:
-                    main_embed.description = msg_text
-                main_embed.set_author(name=author_name, icon_url=icon_url, url=msg_link)
-                
-                if image_groups[0]:
-                    main_embed.set_image(url=f"attachment://{image_groups[0][0]}")
-                
-                embeds.append(main_embed)
-
-                for i, group in enumerate(image_groups):
-                    if i == 0:
-                        for j, img_name in enumerate(group):
-                            if j > 0:
-                                embed = Embed(url=msg_link, color=EMBED_COLOR)
-                                embed.set_image(url=f"attachment://{img_name}")
-                                embeds.append(embed)
-                    else:
-                        for img_name in group:
-                            embed = Embed(url=msg_link, color=EMBED_COLOR)
-                            embed.set_image(url=f"attachment://{img_name}")
-                            embeds.append(embed)
-
-                webhook.send(username=author_name, avatar_url=icon_url, embeds=embeds, files=files)
+                log_message("No parseable content to send. Sending message link", log_type="error")
+                webhook.send(username=author_name, avatar_url=icon_url, content=f"Unable to parse the message due to attached media and/or document. [Message Link]({msg_link})")
             
-            log_message("Message sent successfully.", log_type="new_message")
             time.sleep(0.4)
             return
         
@@ -248,7 +196,7 @@ def sendMissingMessages(channel, last_number, current_number, author_name, icon_
     for missing_number in range(last_number + 1, current_number):
         missing_link = f"https://t.me/{channel}/{missing_number}"
         log_message(f"Sending placeholder for missing message: {missing_link}", log_type="error")
-        sendMessage(missing_link, None, [], author_name, icon_url)
+        sendMessage(missing_link, None, None, author_name, icon_url)
 
 def main(tg_channel):
     SCRIPT_START_TIME = datetime.datetime.now()
@@ -282,17 +230,12 @@ def main(tg_channel):
                     continue
 
                 msg_text = getText(tg_box)
-
-                images = getGroupedImages(tg_box)
-                if not images:
-                    single_image = getImage(tg_box)
-                    if single_image:
-                        images = [single_image]
+                msg_image = getImage(tg_box)
 
                 if msg_link not in msg_log:
                     log_message(f"New message found: {msg_link}", log_type="new_message")
                     msg_temp.append(msg_link)
-                    sendMessage(msg_link, msg_text, images, author_name, icon_url, timestamp=timestamp)
+                    sendMessage(msg_link, msg_text, msg_image, author_name, icon_url, timestamp=timestamp)
 
                 msg_temp.append(msg_link)
                 last_processed_number = current_number
