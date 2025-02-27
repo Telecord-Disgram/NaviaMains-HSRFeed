@@ -63,8 +63,8 @@ The bot maintains logs in `Disgram.log` with the following information:
 ## Notes
 
 - Respect Telegram's rate limits by keeping appropriate cooldown times to avoid IP bans from Telegram
-- The bot only works with public Telegram channels
 - Messages are fetched from Telegram's public preview page (https://t.me/s/{channel})
+- The bot only works with public Telegram channels with an accessible preview page.
 - Discord webhook rate limits are handled automatically
 - Image quality of compressed images is too low to scrap from preview page. Use Telegram app for higher quality.
 - The bot can not parse messages with following content for now:
