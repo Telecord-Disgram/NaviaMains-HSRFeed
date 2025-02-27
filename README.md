@@ -41,7 +41,7 @@ pip install -r requirements.txt
    - Adjust `COOLDOWN` if needed (default: 300 seconds)
    - Customize `EMBED_COLOR` if desired
 
-2. (Optional) Initialize `webhook_logs.log` with specific message IDs to start forwarding from particular points
+2. (Optional) Initialize `Disgram.log` with specific message IDs to start forwarding from particular points
 
 ## Usage
 
@@ -55,7 +55,7 @@ python main.py
 
 ## Logging
 
-The bot maintains logs in `webhook_logs.log` with the following information:
+The bot maintains logs in `Disgram.log` with the following information:
 - Error messages
 - New message notifications
 - Operational status updates
@@ -72,7 +72,7 @@ The bot maintains logs in `webhook_logs.log` with the following information:
   - Videos
   - Documents
   - Grouped Items
-  - Messages with quoted text.
+  - Messages with quoted text or replies
 
 ## Contributing
 
