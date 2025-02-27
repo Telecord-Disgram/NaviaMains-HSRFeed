@@ -8,7 +8,7 @@ A Python-based tool to forward messages from public Telegram channels to Discord
 - Forward messages from multiple Telegram channels to Discord
 - Automated message source crediting in embeds
 - Preserve message formatting (bold, italic, links, code blocks, etc.)
-- Support for images and text content
+- Support for text and media content
 - Automatic handling of missing messages
 - Robust error handling and retry mechanisms
 - Rate limit compliance for both Telegram and Discord
@@ -65,9 +65,12 @@ The bot maintains logs in `Disgram.log` with the following information:
 - Respect Telegram's rate limits by keeping appropriate cooldown times to avoid IP bans from Telegram
 - Messages are fetched from Telegram's public preview page (https://t.me/s/{channel})
 - The bot only works with public Telegram channels with an accessible preview page.
-- Discord webhook rate limits are handled automatically
+- Discord webhook rate limits are handled automatically.
 - Image quality of compressed images is too low to scrap from preview page. Use Telegram app for higher quality.
-- The bot can not parse messages with following content for now:
+- Video URL extraction currently is only possible if 
+  1. Video size, which determines if the Telegram public preview page will preview the video or not.
+  2. Video is not in a grouped message block.
+- The bot can not fully parse messages reliably with following content for now:
   - Uncompressed Images
   - Videos
   - Documents

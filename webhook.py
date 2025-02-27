@@ -13,9 +13,7 @@ from discord import SyncWebhook, Embed, File
 def log_message(message, log_type="info"):
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_entry = f"{timestamp} {message}"
-
     print(log_entry)
-
     if log_type in ["error", "new_message", "status"]:
         with open("Disgram.log", "a") as log_file:
             log_file.write(log_entry + "\n")
@@ -105,7 +103,8 @@ def getImage(tg_box):
     if msg_image:
         startIndex = msg_image['style'].find("background-image:url('") + 22
         endIndex = msg_image['style'].find(".jpg')") + 4
-        return msg_image['style'][startIndex:endIndex]
+        if startIndex > 21 and endIndex > 3:
+            return msg_image['style'][startIndex:endIndex]
     return None
 
 def getTimestamp(tg_box):
@@ -141,7 +140,13 @@ def download_image(image_url):
                 log_message("Max retries reached. Unable to download image.", log_type="error")
                 return None, None
 
-def sendMessage(msg_link, msg_text, msg_image, author_name, icon_url, timestamp=None):
+def getVideo(tg_box):
+    video_element = tg_box.find('video', {'class': 'tgme_widget_message_video'})
+    if video_element and 'src' in video_element.attrs:
+        return video_element['src']
+    return None
+
+def sendMessage(msg_link, msg_text, msg_image, msg_video, author_name, icon_url, timestamp=None):
     max_retries = 5
     retry_delay = 2
     
@@ -155,35 +160,36 @@ def sendMessage(msg_link, msg_text, msg_image, author_name, icon_url, timestamp=
         try:
             webhook = SyncWebhook.from_url(WEBHOOK_URL)
             
-            if msg_text or image_data:
-                embed = Embed(title='Message Link', url=msg_link, color=EMBED_COLOR, timestamp=timestamp)
-                
-                if msg_text:
-                    embed.description = msg_text
-                
-                embed.set_author(name=author_name, icon_url=icon_url, url=msg_link)
-                
-                files = []
-                if image_data and image_filename:
-                    file = File(image_data, filename=image_filename)
-                    files.append(file)
-                    embed.set_image(url=f"attachment://{image_filename}")
-                
-                log_message(f"Sending message to Discord: {msg_link}", log_type="new_message")
-                
-                if files:
-                    webhook.send(username=author_name, avatar_url=icon_url, embed=embed, files=files)
-                else:
-                    webhook.send(username=author_name, avatar_url=icon_url, embed=embed)
-                
-                log_message("Message sent successfully.", log_type="new_message")
-            else:
-                log_message("No parseable content to send. Sending message link", log_type="error")
-                webhook.send(username=author_name, avatar_url=icon_url, content=f"Unable to parse the message due to attached media and/or document. [Message Link]({msg_link})")
+            embed = Embed(title='Message Link', url=msg_link, color=EMBED_COLOR, timestamp=timestamp)
             
+            if msg_text:
+                embed.description = msg_text
+            
+            embed.set_author(name=author_name, icon_url=icon_url, url=msg_link)
+            
+            files = []
+            if image_data and image_filename:
+                file = File(image_data, filename=image_filename)
+                files.append(file)
+                embed.set_image(url=f"attachment://{image_filename}")
+            
+            log_message(f"Sending message to Discord: {msg_link}", log_type="new_message")
+            
+            if files:
+                webhook.send(username=author_name, avatar_url=icon_url, embed=embed, files=files)
+            else:
+                webhook.send(username=author_name, avatar_url=icon_url, embed=embed)
+            
+            if msg_video:
+                video_content = f"[Attached video]({msg_video})\n[Message Link](<{msg_link}>)"
+                log_message(f"Sending video link as separate message: {msg_video}", log_type="new_message")
+                time.sleep(0.4)
+                webhook.send(username=author_name, avatar_url=icon_url, content=video_content)
+            
+            log_message("Message sent successfully.", log_type="new_message")
             time.sleep(0.4)
             return
-        
+            
         except requests.exceptions.RequestException as e:
             log_message(f"Error sending message to Discord: {e}", log_type="error")
             if attempt < max_retries - 1:
@@ -196,7 +202,7 @@ def sendMissingMessages(channel, last_number, current_number, author_name, icon_
     for missing_number in range(last_number + 1, current_number):
         missing_link = f"https://t.me/{channel}/{missing_number}"
         log_message(f"Sending placeholder for missing message: {missing_link}", log_type="error")
-        sendMessage(missing_link, None, None, author_name, icon_url)
+        sendMessage(missing_link, None, [], author_name, icon_url)
 
 def main(tg_channel):
     SCRIPT_START_TIME = datetime.datetime.now()
@@ -231,11 +237,12 @@ def main(tg_channel):
 
                 msg_text = getText(tg_box)
                 msg_image = getImage(tg_box)
+                msg_video = getVideo(tg_box)
 
                 if msg_link not in msg_log:
                     log_message(f"New message found: {msg_link}", log_type="new_message")
                     msg_temp.append(msg_link)
-                    sendMessage(msg_link, msg_text, msg_image, author_name, icon_url, timestamp=timestamp)
+                    sendMessage(msg_link, msg_text, msg_image, msg_video, author_name, icon_url, timestamp=timestamp)
 
                 msg_temp.append(msg_link)
                 last_processed_number = current_number
