@@ -202,7 +202,7 @@ def sendMissingMessages(channel, last_number, current_number, author_name, icon_
     for missing_number in range(last_number + 1, current_number):
         missing_link = f"https://t.me/{channel}/{missing_number}"
         log_message(f"Sending placeholder for missing message: {missing_link}", log_type="error")
-        sendMessage(missing_link, None, [], author_name, icon_url)
+        sendMessage(missing_link, None, None, None, author_name, icon_url)
 
 def main(tg_channel):
     SCRIPT_START_TIME = datetime.datetime.now()
