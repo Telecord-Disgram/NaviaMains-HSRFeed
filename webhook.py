@@ -6,7 +6,7 @@ import re
 import os
 import io
 from dateutil import parser
-from config import WEBHOOK_URL, COOLDOWN, EMBED_COLOR
+from config import WEBHOOK_URL, COOLDOWN, EMBED_COLOR, ERROR_PLACEHOLDER
 from bs4 import BeautifulSoup
 from discord import SyncWebhook, Embed, File
 
@@ -198,11 +198,11 @@ def sendMessage(msg_link, msg_text, msg_image, msg_video, author_name, icon_url,
             else:
                 log_message("Max retries reached. Message not sent.", log_type="error")
 
-def sendMissingMessages(channel, last_number, current_number, author_name, icon_url):
+def sendMissingMessages(channel, last_number, current_number, author_name, icon_url, timestamp):
     for missing_number in range(last_number + 1, current_number):
         missing_link = f"https://t.me/{channel}/{missing_number}"
         log_message(f"Sending placeholder for missing message: {missing_link}", log_type="error")
-        sendMessage(missing_link, None, None, None, author_name, icon_url)
+        sendMessage(missing_link, ERROR_PLACEHOLDER, None, None, author_name, icon_url, timestamp=timestamp)
 
 def main(tg_channel):
     SCRIPT_START_TIME = datetime.datetime.now()
@@ -229,7 +229,7 @@ def main(tg_channel):
                 timestamp = getTimestamp(tg_box)
 
                 if last_processed_number > 0 and current_number > last_processed_number + 1:
-                    sendMissingMessages(tg_channel, last_processed_number, current_number, author_name, icon_url)
+                    sendMissingMessages(tg_channel, last_processed_number, current_number, author_name, icon_url, timestamp)
 
                 if is_message_logged(tg_channel, current_number):
                     log_message(f"Skipping already logged message: {msg_link}", log_type="status2")
