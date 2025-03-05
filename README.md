@@ -69,7 +69,7 @@ The bot maintains logs in `Disgram.log` with the following information:
 - Discord webhook rate limits are handled automatically.
 - Discord webhook rate limits are handled automatically.
 - Image quality of compressed images is too low to scrap from preview page. Use Telegram app for higher quality.
-- Video URL extraction currently is only possible if:
+- Video URL extraction currently is only possible in following cases:
   1. Video size, which determines if the Telegram public preview page will preview the video or not.
   2. Video is not in a grouped message block.
 - The bot can not fully parse messages reliably with following content for now:
