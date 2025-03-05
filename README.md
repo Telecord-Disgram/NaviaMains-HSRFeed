@@ -40,7 +40,7 @@ pip install -r requirements.txt
    - Add your Telegram channel links to the `Channels` list
    - Set your Discord webhook URL in `WEBHOOK_URL`
    - Adjust `COOLDOWN` if needed (default: 300 seconds)
-   - Customize `EMBED_COLOR` if desired
+   - Customize `EMBED_COLOR` and `ERROR_PLACEHOLDER` if desired
 
 2. (Optional) Initialize `Disgram.log` with specific message IDs to start forwarding from particular points
 
