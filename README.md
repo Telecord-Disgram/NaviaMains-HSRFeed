@@ -36,13 +36,15 @@ pip install -r requirements.txt
 
 ## Configuration
 
-1. Open `config.py` and modify the following:
+- Open `config.py` and modify the following:
    - Add your Telegram channel links to the `Channels` list
-   - Set your Discord webhook URL in `WEBHOOK_URL`
-   - Adjust `COOLDOWN` if needed (default: 300 seconds)
-   - Customize `EMBED_COLOR` and `ERROR_PLACEHOLDER` if desired
+   - Set your Discord webhook URL in `WEBHOOK_URL`.
+   - Adjust `COOLDOWN` if needed (Suggested 300s or more).
+   - Customize `EMBED_COLOR` and `ERROR_PLACEHOLDER` if desired.
 
-2. (Optional) Initialize `Disgram.log` with specific message IDs to start forwarding from particular points
+> To send messages to a Thread under the channel of the webhook, replace `THREAD_ID = None` as `THREAD_ID = "{thread_id}"` in `config.py`
+
+> (Optional) Initialize `Disgram.log` with specific message IDs to start forwarding from particular points.
 
 ## Usage
 
@@ -67,7 +69,9 @@ The bot maintains logs in `Disgram.log` with the following information:
 - Messages are fetched from Telegram's public preview page (https://t.me/s/{channel})
 - The bot only works with public Telegram channels with an accessible preview page.
 - Discord webhook rate limits are handled automatically.
-- Discord webhook rate limits are handled automatically.
+
+## Known Issues
+- There can be occasional cases of Error `400 Client Error: Bad Request for url` when sending messages to a thread.
 - Image quality of compressed images is too low to scrap from preview page. Use Telegram app for higher quality.
 - Video URL extraction currently is only possible in following cases:
   1. Video size, which determines if the Telegram public preview page will preview the video or not.
