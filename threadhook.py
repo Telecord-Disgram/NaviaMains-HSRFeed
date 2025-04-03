@@ -14,12 +14,12 @@ def log_message(message, log_type="info"):
     log_entry = f"{timestamp} {message}"
     print(log_entry)
     if log_type in ["error", "new_message", "status"]:
-        with open("Testgram.log", "a") as log_file:
+        with open("Disgram.log", "a") as log_file:
             log_file.write(log_entry + "\n")
 
 def is_message_logged(channel, number):
     try:
-        with open("Testgram.log", "r") as log_file:
+        with open("Disgram.log", "r") as log_file:
             for line in log_file:
                 match = re.search(rf"https://t.me/{channel}/(\d+)", line)
                 if match and int(match.group(1)) >= int(number):
