@@ -2,6 +2,9 @@
 
 A Python-based tool to forward messages from public Telegram channels to Discord using webhooks embeds. Disgram scrapes Telegram's public preview pages and forwards messages, including text, images, and formatted content, to Discord channels through webhooks.
 
+## Workflow
+![Disgram.svg](https://github.com/user-attachments/assets/15554202-d8c0-4ee0-a390-f751e534ebe9)
+
 ## Features
 
 - No Telegram or Discord Bots required
@@ -90,3 +93,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details
+
