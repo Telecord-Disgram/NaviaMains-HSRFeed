@@ -27,15 +27,15 @@ A Python-based tool to forward messages from public Telegram channels to Discord
 ## Installation
 
 1. Clone the repository:
-```
-git clone https://github.com/SimpNick6703/Disgram.git
-cd Disgram
-```
+    ```
+    git clone https://github.com/SimpNick6703/Disgram.git
+    cd Disgram
+    ```
 
 2. Install the required dependencies:
-```
-pip install -r requirements.txt
-```
+    ```
+    pip install -r requirements.txt
+    ```
 
 ## Configuration
 
@@ -45,16 +45,17 @@ pip install -r requirements.txt
    - Adjust `COOLDOWN` if needed (Suggested 300s or more).
    - Customize `EMBED_COLOR` and `ERROR_PLACEHOLDER` if desired.
 
-> To send messages to a Thread under the channel of the webhook, replace `THREAD_ID = None` as `THREAD_ID = "{thread_id}"` in `config.py`
-
-> (Optional) Initialize `Disgram.log` with specific message IDs to start forwarding from particular points.
+> [!TIP]
+> To send messages to a Thread under the channel of the webhook, replace `THREAD_ID = None` as `THREAD_ID = "{thread_id}"` in `config.py`.
+>
+> (Optional but recommended) Initialize `Disgram.log` with specific message IDs to start forwarding from particular message link.
 
 ## Usage
 
 1. Start the bot:
-```
-python main.py
-```
+    ```
+    python main.py
+    ```
 2. The bot will create separate processes for each channel and begin forwarding messages.
 
 3. To stop the bot, press `Ctrl + C`.
@@ -74,17 +75,12 @@ The bot maintains logs in `Disgram.log` with the following information:
 - Discord webhook rate limits are handled automatically.
 
 ## Known Issues
-- There can be occasional cases of Error `400 Client Error: Bad Request for url` when sending messages to a thread.
 - Image quality of compressed images is too low to scrap from preview page. Use Telegram app for higher quality.
-- Video URL extraction currently is only possible in following cases:
-  1. Video size, which determines if the Telegram public preview page will preview the video or not.
-  2. Video is not in a grouped message block.
+- Video URL extraction depends on video size, which determines if the Telegram public preview page will preview the video or not. If the video is too large, it won't be previewed and thus can't be scraped.
 - The bot can not fully parse messages reliably with following content for now:
-  - Uncompressed Images
-  - Videos
+  - Uncompressed Media
   - Documents
-  - Grouped Items
-  - Messages with quoted text or replies
+  - Messages with replies
 
 ## Contributing
 
@@ -92,5 +88,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details
-
+This project is licensed under the MIT License - see the LICENSE file for details.
