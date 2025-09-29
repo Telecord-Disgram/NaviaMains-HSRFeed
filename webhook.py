@@ -216,9 +216,9 @@ def getTimestamp(tg_box):
         return parser.isoparse(time_element['datetime'])
     return None
 
-def download_image(image_url):
+def download_image(image_url: str | None) -> tuple[io.BytesIO | None, str | None]:
     if not image_url:
-        return None, None
+        return (None, None)
     
     max_retries = 3
     retry_delay = 2
@@ -241,7 +241,41 @@ def download_image(image_url):
                 retry_delay *= 2
             else:
                 log_message("Max retries reached. Unable to download image.", log_type="error")
-                return None, None
+                return (None, None)
+    
+    # This should never be reached, but added for type checker completeness
+    return (None, None)
+
+def download_video(video_url: str | None) -> tuple[io.BytesIO | None, str | None]:
+    if not video_url:
+        return (None, None)
+    
+    max_retries = 3
+    retry_delay = 2
+    
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(video_url, timeout=30)
+            response.raise_for_status()
+            
+            # Get file extension from URL or default to mp4
+            file_ext = video_url.split('.')[-1].split('?')[0] if '.' in video_url else 'mp4'
+            if file_ext not in ['mp4', 'mov', 'avi', 'webm', 'mkv']:
+                file_ext = 'mp4'
+            
+            filename = f"video_{int(time.time())}_{attempt}.{file_ext}"
+            return io.BytesIO(response.content), filename
+        except Exception as e:
+            log_message(f"Error downloading video: {e}", log_type="error")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+                retry_delay *= 2
+            else:
+                log_message("Max retries reached. Unable to download video.", log_type="error")
+                return (None, None)
+    
+    # This should never be reached, but added for type checker completeness
+    return (None, None)
 
 def getVideo(tg_box):
     video_element = tg_box.find('video', {'class': 'tgme_widget_message_video'})
@@ -263,16 +297,32 @@ def sendMessage(msg_link, msg_text, msg_image, msg_video, author_name, icon_url,
         sendGroupedMediaMessage(msg_link, msg_text, images_to_send, videos_to_send, author_name, icon_url, timestamp)
         return
     
-    # Original single media logic
+    # Handle media files (image and video)
     image_data = None
     image_filename = None
+    video_data = None
+    video_filename = None
+    video_sent_as_attachment = False
     
+    # Try to get image file
     if images_to_send:
         result = download_image(images_to_send[0])
-        if result:
+        if result and result[0] is not None and result[1] is not None:
             image_data, image_filename = result
         else:
             image_data, image_filename = None, None
+    
+    # Try to get video file if video exists
+    if videos_to_send:
+        video_url = videos_to_send[0]
+        try:
+            result = download_video(video_url)
+            if result and result[0] is not None and result[1] is not None:
+                video_data, video_filename = result
+                video_sent_as_attachment = True
+                log_message(f"Video will be sent as attachment: {video_url}", log_type="new_message")
+        except Exception as e:
+            log_message(f"Failed to download video, will fallback to link: {e}", log_type="error")
     
     for attempt in range(max_retries):
         try:
@@ -285,22 +335,30 @@ def sendMessage(msg_link, msg_text, msg_image, msg_video, author_name, icon_url,
             
             embed.set_author(name=author_name, icon_url=icon_url, url=msg_link)
             
+            # Prepare files list
             files = []
             if image_data and image_filename:
                 file = File(image_data, filename=image_filename)
                 files.append(file)
                 embed.set_image(url=f"attachment://{image_filename}")
             
+            if video_data and video_filename:
+                video_file = File(video_data, filename=video_filename)
+                files.append(video_file)
+            
             log_message(f"Sending message to Discord: {msg_link}", log_type="new_message")
             
+            # Send the main message with all attachments
             if files:
                 webhook.send(username=author_name, avatar_url=icon_url, embed=embed, files=files)
             else:
                 webhook.send(username=author_name, avatar_url=icon_url, embed=embed)
             
-            if videos_to_send:
-                video_content = f"[Attached video]({videos_to_send[0]})\n[Message Link](<{msg_link}>)"
-                log_message(f"Sending video link as separate message: {videos_to_send[0]}", log_type="new_message")
+            # Only send video as link if it failed to attach
+            if videos_to_send and not video_sent_as_attachment:
+                video_url = videos_to_send[0]
+                video_content = f"[Attached video]({video_url})\n[Message Link](<{msg_link}>)"
+                log_message(f"Sending video link as separate message: {video_url}", log_type="new_message")
                 time.sleep(0.4)
                 webhook.send(username=author_name, avatar_url=icon_url, content=video_content)
             
@@ -341,7 +399,7 @@ def sendGroupedMediaMessage(msg_link, msg_text, images, videos, author_name, ico
             files = []
             if images:
                 result = download_image(images[0])
-                if result:
+                if result and result[0] is not None and result[1] is not None:
                     image_data, image_filename = result
                 else:
                     image_data, image_filename = None, None
@@ -362,24 +420,69 @@ def sendGroupedMediaMessage(msg_link, msg_text, images, videos, author_name, ico
             for i, image_url in enumerate(images[1:], 2):
                 try:
                     result = download_image(image_url)
-                    if result:
+                    if result and result[0] is not None and result[1] is not None:
                         image_data, image_filename = result
                         if image_data and image_filename:
-                            image_embed = Embed(color=EMBED_COLOR)
-                            image_embed.set_image(url=f"attachment://{image_filename}")
+                            image_embed = Embed(
+                                title='Message Link',
+                                url=msg_link,
+                                color=EMBED_COLOR,
+                                timestamp=timestamp
+                            )
+                            
+                            if msg_text:
+                                image_embed.description = msg_text[:4096]
+                                
+                            image_embed.set_author(name=author_name, icon_url=icon_url, url=msg_link)
                             image_embed.set_footer(text=f'Image {i} of {len(images)}')
+                            image_embed.set_image(url=f"attachment://{image_filename}")
                             
                             image_file = File(image_data, filename=image_filename)
-                            webhook.send(username=author_name, avatar_url=icon_url, embed=image_embed, files=[image_file])
+                            webhook.send(username=author_name, avatar_url=icon_url, embed=image_embed, file=image_file)
                         time.sleep(0.3)
                 except Exception as e:
                     log_message(f"Error sending image {i}: {e}", log_type="error")
             
-            # Send videos as links
+            # Send videos - try attachment first, fallback to links
             for i, video_url in enumerate(videos, 1):
                 try:
-                    video_content = f"🎥 **Video** [**{i}**]({video_url}) of {len(videos)}\n[Message Link](<{msg_link}>)"
-                    webhook.send(username=author_name, avatar_url=icon_url, content=video_content)
+                    video_sent_as_attachment = False
+                    
+                    # Try to send video as attachment first
+                    try:
+                        result = download_video(video_url)
+                        if result and result[0] is not None and result[1] is not None:
+                            video_data, video_filename = result
+                            log_message(f"Attempting to send video {i} as attachment: {video_url}", log_type="new_message")
+                            
+                            # Create embed for video attachment with same format as regular messages
+                            video_embed = Embed(
+                                title='Message Link',
+                                url=msg_link,
+                                color=EMBED_COLOR,
+                                timestamp=timestamp
+                            )
+                            
+                            if msg_text:
+                                video_embed.description = msg_text[:4096]  # Discord embed description limit
+                                
+                            video_embed.set_author(name=author_name, icon_url=icon_url, url=msg_link)
+                            video_embed.set_footer(text=f'Video {i} of {len(videos)}')
+                            
+                            # At this point, we know video_data and video_filename are not None due to the check above
+                            assert video_data is not None and video_filename is not None
+                            video_file = File(video_data, filename=video_filename)
+                            webhook.send(username=author_name, avatar_url=icon_url, embed=video_embed, file=video_file)
+                            video_sent_as_attachment = True
+                            log_message(f"Video {i} sent successfully as attachment", log_type="new_message")
+                    except Exception as e:
+                        log_message(f"Failed to send video {i} as attachment, falling back to link: {e}", log_type="error")
+                    
+                    # Fallback to sending video as link if attachment failed
+                    if not video_sent_as_attachment:
+                        video_content = f"🎥 **Video** [**{i}**]({video_url}) of {len(videos)}\n[Message Link](<{msg_link}>)"
+                        webhook.send(username=author_name, avatar_url=icon_url, content=video_content)
+                    
                     time.sleep(0.3)
                 except Exception as e:
                     log_message(f"Error sending video {i}: {e}", log_type="error")
