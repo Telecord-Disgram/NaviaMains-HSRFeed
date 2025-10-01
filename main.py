@@ -1,37 +1,220 @@
 import subprocess
 import time
+import threading
+import datetime
+import os
+import psutil
+import requests
+from flask import Flask, jsonify
 from config import Channels, WEBHOOK_URL, THREAD_ID
 
 processes = []
-try:
-    if THREAD_ID != None:
-        for channel in Channels:
-            print(f"Starting bot for {channel}...")
-            channel = channel[13:]
-            process = subprocess.Popen(["python", "threadhook.py", channel, WEBHOOK_URL + f"?thread_id={THREAD_ID}"])
-            processes.append(process)
+bot_start_time = None
+last_health_check = None
+health_status = {"status": "starting", "details": {}}
 
-        print("Bots are running. Press Ctrl + C to stop.")
+app = Flask(__name__)
+
+def check_process_health():
+    alive_processes = 0
+    dead_processes = []
+    
+    for i, process in enumerate(processes):
+        if process and process.poll() is None:
+            alive_processes += 1
+        else:
+            dead_processes.append(i)
+    
+    return alive_processes, dead_processes
+
+def check_telegram_connectivity():
+    try:
+        response = requests.get("https://t.me/", timeout=10)
+        return response.status_code == 200
+    except Exception:
+        return False
+
+def check_discord_webhook():
+    if not WEBHOOK_URL or "{webhookID}" in WEBHOOK_URL:
+        return False, "Webhook URL not configured"
+    
+    try:
+        response = requests.get(WEBHOOK_URL, timeout=10)
+        if response.status_code == 200:
+            return True, "Webhook accessible"
+        else:
+            return False, f"Webhook returned status {response.status_code}"
+    except Exception as e:
+        return False, f"Webhook error: {str(e)}"
+
+def get_system_stats():
+    try:
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
         
+        return {
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory.percent,
+            "memory_available_mb": round(memory.available / 1024 / 1024, 2),
+            "disk_percent": disk.percent,
+            "disk_free_gb": round(disk.free / 1024 / 1024 / 1024, 2)
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.route('/health')
+def health_check():
+    global last_health_check
+    last_health_check = datetime.datetime.now()
+    
+    alive_count, dead_processes = check_process_health()
+    total_processes = len(processes)
+    
+    telegram_ok = check_telegram_connectivity()
+    discord_ok, discord_msg = check_discord_webhook()
+    
+    system_stats = get_system_stats()
+    
+    uptime_seconds = (datetime.datetime.now() - bot_start_time).total_seconds() if bot_start_time else 0
+    uptime_minutes = round(uptime_seconds / 60, 2)
+    
+    is_healthy = (
+        alive_count == total_processes and
+        alive_count > 0 and
+        telegram_ok and
+        discord_ok
+    )
+    
+    status_code = 200 if is_healthy else 503
+    
+    health_data = {
+        "status": "healthy" if is_healthy else "unhealthy",
+        "timestamp": last_health_check.isoformat(),
+        "uptime_minutes": uptime_minutes,
+        "processes": {
+            "total": total_processes,
+            "running": alive_count,
+            "dead": dead_processes,
+            "channels": [ch[13:] if ch.startswith("https://t.me/") else ch for ch in Channels]
+        },
+        "external_services": {
+            "telegram_reachable": telegram_ok,
+            "discord_webhook": {
+                "accessible": discord_ok,
+                "message": discord_msg
+            }
+        },
+        "system": system_stats,
+        "configuration": {
+            "thread_id_configured": THREAD_ID is not None,
+            "webhook_configured": WEBHOOK_URL and "{webhookID}" not in WEBHOOK_URL,
+            "channels_count": len(Channels)
+        }
+    }
+    
+    global health_status
+    health_status = health_data
+    
+    return jsonify(health_data), status_code
+
+@app.route('/')
+def root():
+    return jsonify({
+        "name": "Disgram",
+        "description": "Telegram to Discord messages forwarding bot",
+        "health_endpoint": "/health",
+        "channels": len(Channels),
+        "status": health_status.get("status", "unknown")
+    })
+
+def start_bot_processes():
+    global bot_start_time, processes
+    bot_start_time = datetime.datetime.now()
+    
+    print(f"Starting Disgram bot with {len(Channels)} channels...")
+    
+    try:
+        if THREAD_ID is not None:
+            for channel in Channels:
+                print(f"Starting threaded bot for {channel}...")
+                channel_name = channel[13:] if channel.startswith("https://t.me/") else channel
+                process = subprocess.Popen(
+                    ["python", "threadhook.py", channel_name, WEBHOOK_URL + f"?thread_id={THREAD_ID}"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                processes.append(process)
+        else:
+            for channel in Channels:
+                print(f"Starting webhook bot for {channel}...")
+                channel_name = channel[13:] if channel.startswith("https://t.me/") else channel
+                process = subprocess.Popen(
+                    ["python", "webhook.py", channel_name],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                processes.append(process)
+        
+        print(f"Started {len(processes)} bot processes successfully.")
+        
+    except Exception as e:
+        print(f"Error starting bot processes: {e}")
+
+def run_flask_server():
+    port = int(os.environ.get('PORT', 5000))
+    print(f"Starting health check server on port {port}...")
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+if __name__ == "__main__":
+    import os
+    
+    start_bot_processes()
+    
+    flask_thread = threading.Thread(target=run_flask_server, daemon=True)
+    flask_thread.start()
+    
+    print("Disgram bot is running with health check endpoint.")
+    print("Health check available at: /health")
+    
+    try:
         while True:
-            time.sleep(1)
+            time.sleep(30)
             
-    else:
-        for channel in Channels:
-            print(f"Starting bot for {channel}...")
-            channel = channel[13:]
-            process = subprocess.Popen(["python", "webhook.py", channel])
-            processes.append(process)
-
-        print("Bots are running. Press Ctrl + C to stop.")
+            alive_count, dead_processes = check_process_health()
+            if dead_processes:
+                print(f"Detected {len(dead_processes)} dead processes, restarting...")
+                for dead_idx in dead_processes:
+                    if dead_idx < len(processes) and dead_idx < len(Channels):
+                        channel = Channels[dead_idx]
+                        channel_name = channel[13:] if channel.startswith("https://t.me/") else channel
+                        print(f"Restarting process for {channel}...")
+                        
+                        if THREAD_ID is not None:
+                            new_process = subprocess.Popen(
+                                ["python", "threadhook.py", channel_name, WEBHOOK_URL + f"?thread_id={THREAD_ID}"],
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE
+                            )
+                        else:
+                            new_process = subprocess.Popen(
+                                ["python", "webhook.py", channel_name],
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE
+                            )
+                        processes[dead_idx] = new_process
+            
+    except KeyboardInterrupt:
+        print("\nShutting down all bots...")
+        for process in processes:
+            if process and process.poll() is None:
+                process.terminate()
         
-        while True:
-            time.sleep(1)
-
-except KeyboardInterrupt:
-    print("\nShutting down all bots...")
-    for process in processes:
-        process.terminate()
-    for process in processes:
-        process.wait()
-    print("All bots have been stopped.")
+        for process in processes:
+            if process:
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+        
+        print("All bots have been stopped.")

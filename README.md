@@ -96,7 +96,7 @@ flowchart TD
 - Automatic handling of missing messages
 - Robust error handling and retry mechanisms
 - Rate limit compliance for both Telegram and Discord
-- Detailed logging system
+- Detailed logging system and health monitoring endpoint (`/health`)
 
 ## Prerequisites
 
@@ -143,7 +143,6 @@ flowchart TD
     python main.py
     ```
 2. The bot will create separate processes for each channel and begin forwarding messages.
-
 3. To stop the bot, press `Ctrl + C`.
 
 ## Logging
@@ -152,6 +151,16 @@ The bot maintains logs in `Disgram.log` with the following information:
 - Error messages
 - New message notifications
 - Operational status updates
+
+## Health Monitoring
+
+The bot includes a health check endpoint at `/health` for monitoring:
+- **URL**: `http://localhost:5000/health` (or your server's address)
+- **Method**: GET
+- **Returns**: JSON with health status
+- **Status Codes**: 
+  - `200` - All systems healthy
+  - `500` - Issues detected (check logs for details)
 
 ## Notes
 
