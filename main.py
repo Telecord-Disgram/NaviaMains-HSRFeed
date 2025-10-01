@@ -5,7 +5,7 @@ import datetime
 import os
 import psutil
 import requests
-from flask import Flask, jsonify
+from flask import Flask, jsonify, Response
 from config import Channels, WEBHOOK_URL, THREAD_ID
 
 processes = []
@@ -118,12 +118,59 @@ def health_check():
     
     return jsonify(health_data), status_code
 
+@app.route('/logs')
+def view_logs():
+    try:
+        log_file_path = "Disgram.log"
+        
+        if not os.path.exists(log_file_path):
+            return Response(
+                "Disgram.log file not found",
+                status=404,
+                mimetype='text/plain'
+            )
+        
+        with open(log_file_path, 'r', encoding='utf-8') as file:
+            lines = file.readlines()
+            
+        last_lines = lines[-1000:] if len(lines) > 1000 else lines
+        
+        log_content = ''.join(last_lines)
+        
+        total_lines = len(lines)
+        showing_lines = len(last_lines)
+        header = f"Disgram Log Viewer\n"
+        header += f"Total lines in log: {total_lines}\n"
+        header += f"Showing last {showing_lines} lines\n"
+        header += f"Log file: {os.path.abspath(log_file_path)}\n"
+        header += f"Last modified: {datetime.datetime.fromtimestamp(os.path.getmtime(log_file_path)).isoformat()}\n"
+        header += "=" * 80 + "\n\n"
+        
+        response_content = header + log_content
+        
+        return Response(
+            response_content,
+            mimetype='text/plain',
+            headers={
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Cache-Control': 'no-cache'
+            }
+        )
+        
+    except Exception as e:
+        return Response(
+            f"Error reading log file: {str(e)}",
+            status=500,
+            mimetype='text/plain'
+        )
+
 @app.route('/')
 def root():
     return jsonify({
         "name": "Disgram",
         "description": "Telegram to Discord messages forwarding bot",
         "health_endpoint": "/health",
+        "logs_endpoint": "/logs",
         "channels": len(Channels),
         "status": health_status.get("status", "unknown")
     })
@@ -176,6 +223,7 @@ if __name__ == "__main__":
     
     print("Disgram bot is running with health check endpoint.")
     print("Health check available at: /health")
+    print("Log viewer available at: /logs")
     
     try:
         while True:

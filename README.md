@@ -147,7 +147,7 @@ flowchart TD
 
 ## Logging
 
-The bot maintains logs in `Disgram.log` with the following information:
+The bot maintains logs at `/logs` endpoint that lets you view `Disgram.log` with the following information:
 - Error messages
 - New message notifications
 - Operational status updates
