@@ -138,9 +138,7 @@ flowchart TD
   - `ERROR_PLACEHOLDER`: Message shown for unparseable content.
 
 > [!TIP]
-> **Starting from specific messages**: Initialize `Disgram.log` with message links to start forwarding from particular points.
->
-> **Finding Thread IDs**: Right-click on a thread in Discord → Copy Message Link → Extract the thread ID from the URL
+> **Starting from specific messages**: Instead of simply providing channel links in `TELEGRAM_CHANNELS`, you can provide specific message links in it to start forwarding from particular points.
 
 ## Usage
 

@@ -5,6 +5,7 @@ import datetime
 import os
 import psutil
 import requests
+import re
 from flask import Flask, jsonify, Response
 from config import Channels, WEBHOOK_URL, THREAD_ID
 
@@ -14,6 +15,33 @@ last_health_check = None
 health_status = {"status": "starting", "details": {}}
 
 app = Flask(__name__)
+
+def initialize_disgram_log():
+    existing_links = set()
+    if os.path.exists("Disgram.log"):
+        with open("Disgram.log", "r", encoding="utf-8") as log_file:
+            for line in log_file:
+                line = line.strip()
+                if line.startswith("https://t.me/"):
+                    existing_links.add(line)
+                    
+    new_links = []
+    for channel_url in Channels:
+        if channel_url not in existing_links:
+            new_links.append(channel_url)
+    
+    if new_links:
+        with open("Disgram.log", "a", encoding="utf-8") as log_file:
+            for channel_url in new_links:
+                log_file.write(f"{channel_url}\n")
+
+def extract_channel_name(channel_url):
+    if channel_url.startswith("https://t.me/"):
+        path = channel_url[13:]
+        channel_name = path.split("/")[0]
+        return channel_name
+    else:
+        return channel_url
 
 def check_process_health():
     alive_processes = 0
@@ -103,7 +131,7 @@ def health_check():
             "total": total_processes,
             "running": alive_count,
             "dead": dead_processes,
-            "channels": [ch[13:] if ch.startswith("https://t.me/") else ch for ch in Channels]
+            "channels": [extract_channel_name(ch) for ch in Channels]
         },
         "external_services": {
             "telegram_reachable": telegram_ok,
@@ -187,15 +215,18 @@ def start_bot_processes():
     global bot_start_time, processes
     bot_start_time = datetime.datetime.now()
     
+    # Initialize Disgram.log with channel/message links from environment
+    initialize_disgram_log()
+    
     print(f"Starting Disgram bot with {len(Channels)} channels...")
     
     try:
         if THREAD_ID is not None:
             for channel in Channels:
                 print(f"Starting threaded bot for {channel}...")
-                channel_name = channel[13:] if channel.startswith("https://t.me/") else channel
+                channel_name = extract_channel_name(channel)
                 process = subprocess.Popen(
-                    ["python", "threadhook.py", channel_name, WEBHOOK_URL + f"?thread_id={THREAD_ID}"],
+                    ["python", "threadhook.py", channel_name, f"{WEBHOOK_URL}?thread_id={THREAD_ID}"],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE
                 )
@@ -203,7 +234,7 @@ def start_bot_processes():
         else:
             for channel in Channels:
                 print(f"Starting webhook bot for {channel}...")
-                channel_name = channel[13:] if channel.startswith("https://t.me/") else channel
+                channel_name = extract_channel_name(channel)
                 process = subprocess.Popen(
                     ["python", "webhook.py", channel_name],
                     stdout=subprocess.PIPE,
@@ -243,12 +274,12 @@ if __name__ == "__main__":
                 for dead_idx in dead_processes:
                     if dead_idx < len(processes) and dead_idx < len(Channels):
                         channel = Channels[dead_idx]
-                        channel_name = channel[13:] if channel.startswith("https://t.me/") else channel
+                        channel_name = extract_channel_name(channel)
                         print(f"Restarting process for {channel}...")
                         
                         if THREAD_ID is not None:
                             new_process = subprocess.Popen(
-                                ["python", "threadhook.py", channel_name, WEBHOOK_URL + f"?thread_id={THREAD_ID}"],
+                                ["python", "threadhook.py", channel_name, f"{WEBHOOK_URL}?thread_id={THREAD_ID}"],
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE
                             )
