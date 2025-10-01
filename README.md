@@ -92,11 +92,16 @@ flowchart TD
 - Automated message source crediting in embeds
 - Preserve message formatting (bold, italic, links, code blocks, etc.)
 - Support for text and media content
-- Support for text and media content
 - Automatic handling of missing messages
 - Robust error handling and retry mechanisms
-- Rate limit compliance for both Telegram and Discord
-- Detailed logging system and health monitoring endpoint (`/health`)
+- Send messages to Discord threads using `DISCORD_THREAD_ID`
+- **Advanced Rate Limiting**: Full Discord API compliance with bucket-based rate limiting
+- **Comprehensive Media Handling**: Support for images, videos, and grouped media collections
+- **Smart Grouped Media Processing**: Automatically detects and handles grouped media messages
+- **Embed Formatting**: Rich Discord embeds with author avatars, names, and proper formatting
+- **Health Monitoring**: Real-time health status at `/health` endpoint with rate limit tracking
+- **Log Viewing**: View application logs via `/logs` endpoint for debugging
+- **Process Management**: Automatic process spawning for multiple channels
 
 ## Prerequisites
 
@@ -126,15 +131,16 @@ flowchart TD
   - `DISCORD_WEBHOOK_URL`: Your Discord webhook URL.
   - `DISCORD_THREAD_ID` (Optional): The ID of the Discord thread to send messages to.
   - `TELEGRAM_CHANNELS`: Comma-separated list of public Telegram channel URLs.
+  - `EMBED_COLOR`: Hex color code for embeds (e.g., 89a7d9 or 0x89a7d9).
 
-- Open `config.py` and modify the following:
-  - Adjust `COOLDOWN` if needed (Suggested 300s or more).
-  - Customize `EMBED_COLOR` and `ERROR_PLACEHOLDER` if desired.
+- (Optional) Modify `config.py` for advanced settings:
+  - `COOLDOWN`: Interval between checks (Suggested 300s or more to avoid IP bans).
+  - `ERROR_PLACEHOLDER`: Message shown for unparseable content.
 
 > [!TIP]
-> To send messages to a Thread under the channel of the webhook, replace `THREAD_ID = None` as `THREAD_ID = {thread_id}` in `config.py`.
+> **Starting from specific messages**: Initialize `Disgram.log` with message links to start forwarding from particular points.
 >
-> (Optional but recommended) Initialize `Disgram.log` with specific message IDs to start forwarding from particular message link.
+> **Finding Thread IDs**: Right-click on a thread in Discord → Copy Message Link → Extract the thread ID from the URL
 
 ## Usage
 
@@ -152,22 +158,43 @@ The bot maintains logs at `/logs` endpoint that lets you view `Disgram.log` with
 - New message notifications
 - Operational status updates
 
+## Rate Limiting
+
+Disgram uses comprehensive Discord API rate limiting logic:
+
+- **Per-Route Rate Limiting**: Tracks individual webhook endpoint limits
+- **Global Rate Limiting**: Respects Discord's global rate limits (50 requests/second)
+- **Bucket-Based Tracking**: Uses Discord's rate limit bucket system
+- **429 Response Handling**: Automatic retry with proper wait times
+- **Exponential Backoff**: Smart retry logic for network errors
+- **Rate Limit Headers**: Parses and respects Discord's rate limit headers
+
 ## Health Monitoring
 
 The bot includes a health check endpoint at `/health` for monitoring:
 - **URL**: `http://localhost:5000/health` (or your server's address)
 - **Method**: GET
-- **Returns**: JSON with health status
+- **Returns**: JSON with health status including rate limit information
 - **Status Codes**: 
   - `200` - All systems healthy
   - `500` - Issues detected (check logs for details)
 
+## Log Viewing
+
+Access application logs via the `/logs` endpoint:
+- **URL**: `http://localhost:5000/logs` (or your server's address)
+- **Method**: GET
+- **Returns**: Recent log entries from `Disgram.log`
+- **Features**: Real-time log viewing for debugging and monitoring
+
 ## Notes
 
-- Respect Telegram's rate limits by keeping appropriate cooldown times to avoid IP bans from Telegram
-- Messages are fetched from Telegram's public preview page (https://t.me/s/{channel})
-- The bot only works with public Telegram channels with an accessible preview page.
-- Discord webhook rate limits are handled automatically.
+- **Rate Limiting**: Discord rate limits are handled automatically with intelligent retry logic but be mindful of Telegram Preview Page's rates as well, in order to avoid IP bans.
+- **Message Source**: Messages are fetched from Telegram's public preview page (https://t.me/s/{channel})
+- **Channel Requirements**: Only works with public Telegram channels with accessible preview pages
+- **Media Processing**: Supports single images, videos, and grouped media collections automatically
+- **Thread vs Channel**: The bot automatically chooses between `webhook.py` (channel) and `threadhook.py` (thread) based on `DISCORD_THREAD_ID` configuration
+- **Process Management**: Each Telegram channel runs in a separate process for better performance and isolation
 
 ## Known Issues
 - Image quality of compressed images is too low to scrap from preview page. Use Telegram app for higher quality.

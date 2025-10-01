@@ -88,6 +88,13 @@ def health_check():
     
     status_code = 200 if is_healthy else 503
     
+    # Get rate limiting status
+    try:
+        from rate_limiter import discord_rate_limiter
+        rate_limit_status = discord_rate_limiter.get_rate_limit_status()
+    except Exception as e:
+        rate_limit_status = {"error": f"Failed to get rate limit status: {str(e)}"}
+    
     health_data = {
         "status": "healthy" if is_healthy else "unhealthy",
         "timestamp": last_health_check.isoformat(),
@@ -106,6 +113,7 @@ def health_check():
             }
         },
         "system": system_stats,
+        "rate_limiting": rate_limit_status,
         "configuration": {
             "thread_id_configured": THREAD_ID is not None,
             "webhook_configured": WEBHOOK_URL and "{webhookID}" not in WEBHOOK_URL,
