@@ -119,14 +119,20 @@ flowchart TD
 
 ## Configuration
 
+- Copy `.env.example` to `.env` and fill in the required environment variables:
+    ```
+    cp .env.example .env
+    ```
+  - `DISCORD_WEBHOOK_URL`: Your Discord webhook URL.
+  - `DISCORD_THREAD_ID` (Optional): The ID of the Discord thread to send messages to.
+  - `TELEGRAM_CHANNELS`: Comma-separated list of public Telegram channel URLs.
+
 - Open `config.py` and modify the following:
-   - Add your Telegram channel links to the `Channels` list
-   - Set your Discord webhook URL in `WEBHOOK_URL`.
-   - Adjust `COOLDOWN` if needed (Suggested 300s or more).
-   - Customize `EMBED_COLOR` and `ERROR_PLACEHOLDER` if desired.
+  - Adjust `COOLDOWN` if needed (Suggested 300s or more).
+  - Customize `EMBED_COLOR` and `ERROR_PLACEHOLDER` if desired.
 
 > [!TIP]
-> To send messages to a Thread under the channel of the webhook, replace `THREAD_ID = None` as `THREAD_ID = "{thread_id}"` in `config.py`.
+> To send messages to a Thread under the channel of the webhook, replace `THREAD_ID = None` as `THREAD_ID = {thread_id}` in `config.py`.
 >
 > (Optional but recommended) Initialize `Disgram.log` with specific message IDs to start forwarding from particular message link.
 
