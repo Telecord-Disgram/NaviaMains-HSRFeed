@@ -75,6 +75,30 @@ def check_discord_webhook():
     except Exception as e:
         return False, f"Webhook error: {str(e)}"
 
+def check_log_freshness():
+    log_file_path = "Disgram.log"
+    max_age_minutes = 6  # Consider unhealthy if log is older than 6 minutes
+    
+    try:
+        if not os.path.exists(log_file_path):
+            return False, "Log file does not exist", None
+        
+        last_modified = os.path.getmtime(log_file_path)
+        last_modified_dt = datetime.datetime.fromtimestamp(last_modified)
+        
+        current_time = datetime.datetime.now()
+        age_minutes = (current_time - last_modified_dt).total_seconds() / 60
+        
+        is_fresh = age_minutes <= max_age_minutes
+        
+        if is_fresh:
+            return True, f"Log is fresh (last updated {age_minutes:.1f} minutes ago)", last_modified_dt
+        else:
+            return False, f"Log is stale (last updated {age_minutes:.1f} minutes ago, max allowed: {max_age_minutes})", last_modified_dt
+            
+    except Exception as e:
+        return False, f"Error checking log freshness: {str(e)}", None
+
 def get_system_stats():
     try:
         cpu_percent = psutil.cpu_percent(interval=1)
@@ -91,6 +115,31 @@ def get_system_stats():
     except Exception as e:
         return {"error": str(e)}
 
+def restart_all_processes():
+    """Restart all bot processes when they appear to be zombified"""
+    global processes, bot_start_time
+    
+    print("⚠️  Log freshness check failed - restarting all bot processes...")
+    
+    # Terminate existing processes
+    for process in processes:
+        if process and process.poll() is None:
+            try:
+                process.terminate()
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+            except Exception as e:
+                print(f"Error terminating process: {e}")
+    
+    # Clear the processes list
+    processes.clear()
+    
+    # Restart all processes
+    start_bot_processes()
+    
+    print(f"✅ Restarted {len(processes)} bot processes due to stale logs")
+
 @app.route('/health')
 def health_check():
     global last_health_check
@@ -102,6 +151,9 @@ def health_check():
     telegram_ok = check_telegram_connectivity()
     discord_ok, discord_msg = check_discord_webhook()
     
+    # Check log freshness (critical for detecting zombie processes)
+    log_fresh, log_msg, log_last_modified = check_log_freshness()
+    
     system_stats = get_system_stats()
     
     uptime_seconds = (datetime.datetime.now() - bot_start_time).total_seconds() if bot_start_time else 0
@@ -111,7 +163,8 @@ def health_check():
         alive_count == total_processes and
         alive_count > 0 and
         telegram_ok and
-        discord_ok
+        discord_ok and
+        log_fresh
     )
     
     status_code = 200 if is_healthy else 503
@@ -139,6 +192,12 @@ def health_check():
                 "accessible": discord_ok,
                 "message": discord_msg
             }
+        },
+        "log_freshness": {
+            "is_fresh": log_fresh,
+            "message": log_msg,
+            "last_modified": log_last_modified.isoformat() if log_last_modified else None,
+            "age_minutes": round((datetime.datetime.now() - log_last_modified).total_seconds() / 60, 1) if log_last_modified else None
         },
         "system": system_stats,
         "rate_limiting": rate_limit_status,
@@ -290,6 +349,13 @@ if __name__ == "__main__":
                                 stderr=subprocess.PIPE
                             )
                         processes[dead_idx] = new_process
+            
+            # Check if logs are stale (indicates zombie processes)
+            log_fresh, log_msg, log_last_modified = check_log_freshness()
+            if not log_fresh and alive_count > 0:  # Only restart if we have processes that should be working
+                print(f"🚨 ZOMBIE PROCESSES DETECTED: {log_msg}")
+                print("All processes appear alive but logs are stale - restarting all processes...")
+                restart_all_processes()
             
     except KeyboardInterrupt:
         print("\nShutting down all bots...")
