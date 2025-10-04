@@ -12,6 +12,22 @@ from datetime import datetime
 # Get logger (configured in main.py)
 logger = logging.getLogger('GitManager')
 
+def sanitize_url_for_logging(url: str) -> str:
+    """Remove sensitive tokens from URLs for safe logging"""
+    if not url:
+        return url
+    
+    import re
+    # Replace GitHub Personal Access Tokens with [REDACTED]
+    # Pattern matches: github_pat_[alphanumeric] or ghp_[alphanumeric]
+    sanitized = re.sub(r'github_pat_[A-Za-z0-9_]+', '[REDACTED]', url)
+    sanitized = re.sub(r'ghp_[A-Za-z0-9_]+', '[REDACTED]', sanitized)
+    
+    # Also handle generic token patterns like :token@
+    sanitized = re.sub(r'://[^@\s]+@', '://[REDACTED]@', sanitized)
+    
+    return sanitized
+
 class GitLogManager:
     def __init__(self, github_token: Optional[str] = None, commit_interval: int = 2700):
         self.github_token = github_token
@@ -52,7 +68,7 @@ class GitLogManager:
                               cwd=".", capture_output=True, text=True, check=True)
                 logger.info(f"Git authentication configured for repository: {repo_path}")
             else:
-                logger.warning(f"Unexpected remote URL format: {current_url}")
+                logger.warning(f"Unexpected remote URL format: {sanitize_url_for_logging(current_url)}")
                 
         except subprocess.CalledProcessError as e:
             logger.error(f"Error configuring git authentication: {e}")
@@ -93,15 +109,28 @@ class GitLogManager:
             
             # Push to repository if token is configured
             if self.github_token:
+                # First try normal push
                 result = subprocess.run(["git", "push"], 
                                        cwd=".", capture_output=True, text=True)
+                
+                # If push fails due to no upstream, try setting upstream
+                if result.returncode != 0 and "has no upstream branch" in result.stderr:
+                    logger.info("Setting upstream branch and pushing...")
+                    # Get current branch name
+                    branch_result = subprocess.run(["git", "branch", "--show-current"], 
+                                                 cwd=".", capture_output=True, text=True)
+                    if branch_result.returncode == 0:
+                        current_branch = branch_result.stdout.strip()
+                        result = subprocess.run(["git", "push", "--set-upstream", "origin", current_branch], 
+                                              cwd=".", capture_output=True, text=True)
+                
                 if result.returncode == 0:
                     total_size = sum(os.path.getsize(f) for f in changed_files if os.path.exists(f))
                     logger.info(f"Successfully committed and pushed {len(changed_files)} file(s) to repository (total size: {total_size} bytes)")
                     self.last_commit_time = time.time()
                     return True
                 else:
-                    logger.error(f"Commit successful but push failed: {result.stderr}")
+                    logger.error(f"Commit successful but push failed: {sanitize_url_for_logging(result.stderr)}")
                     return False
             else:
                 logger.info(f"Files committed locally (no GitHub token configured for push)")
@@ -111,7 +140,7 @@ class GitLogManager:
         except subprocess.CalledProcessError as e:
             logger.error(f"Error committing files: {e}")
             if e.stderr:
-                logger.error(f"Git error output: {e.stderr}")
+                logger.error(f"Git error output: {sanitize_url_for_logging(e.stderr)}")
             return False
         except Exception as e:
             logger.error(f"Unexpected error during commit: {e}")
@@ -134,7 +163,7 @@ class GitLogManager:
         except subprocess.CalledProcessError as e:
             logger.error(f"Error pulling repository: {e}")
             if e.stderr:
-                logger.error(f"Git error output: {e.stderr}")
+                logger.error(f"Git error output: {sanitize_url_for_logging(e.stderr)}")
             return False
         except Exception as e:
             logger.error(f"Unexpected error during pull: {e}")

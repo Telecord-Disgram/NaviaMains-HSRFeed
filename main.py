@@ -29,6 +29,21 @@ def setup_logging():
 setup_logging()
 logger = logging.getLogger('DisgramMain')
 
+def sanitize_log_content(content: str) -> str:
+    """Remove sensitive tokens from log content for safe display"""
+    if not content:
+        return content
+    
+    import re
+    # Replace GitHub Personal Access Tokens with [REDACTED]
+    sanitized = re.sub(r'github_pat_[A-Za-z0-9_]+', '[REDACTED]', content)
+    sanitized = re.sub(r'ghp_[A-Za-z0-9_]+', '[REDACTED]', sanitized)
+    
+    # Also handle generic token patterns in URLs
+    sanitized = re.sub(r'://[^@\s]+@', '://[REDACTED]@', sanitized)
+    
+    return sanitized
+
 processes = []
 bot_start_time = None
 last_health_check = None
@@ -303,7 +318,8 @@ def view_app_logs():
         # Show last 500 lines for application logs
         last_lines = lines[-500:] if len(lines) > 500 else lines
         
-        log_content = ''.join(last_lines)
+        # Sanitize log content to remove sensitive information
+        log_content = sanitize_log_content(''.join(last_lines))
         
         total_lines = len(lines)
         showing_lines = len(last_lines)

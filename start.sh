@@ -59,8 +59,23 @@ if command -v git &> /dev/null; then
             # Try to fetch and checkout the deployment branch
             DEPLOY_BRANCH=${GITHUB_DEPLOY_BRANCH:-azure-prod}
             echo "Fetching ${DEPLOY_BRANCH} branch..."
-            git fetch origin "$DEPLOY_BRANCH" 2>/dev/null || echo "Could not fetch remote branch"
-            git checkout -b "$DEPLOY_BRANCH" 2>/dev/null || git checkout "$DEPLOY_BRANCH" 2>/dev/null || true
+            
+            # Configure git pull strategy to avoid warnings
+            git config pull.rebase false 2>/dev/null || true
+            
+            # Fetch all branches
+            git fetch origin 2>/dev/null || echo "Could not fetch remote branches"
+            
+            # Checkout or create the deployment branch
+            if git show-ref --verify --quiet "refs/remotes/origin/$DEPLOY_BRANCH"; then
+                echo "Remote branch $DEPLOY_BRANCH exists, checking out..."
+                git checkout -b "$DEPLOY_BRANCH" "origin/$DEPLOY_BRANCH" 2>/dev/null || git checkout "$DEPLOY_BRANCH" 2>/dev/null || true
+                # Set upstream tracking
+                git branch --set-upstream-to="origin/$DEPLOY_BRANCH" "$DEPLOY_BRANCH" 2>/dev/null || true
+            else
+                echo "Remote branch $DEPLOY_BRANCH not found, creating local branch..."
+                git checkout -b "$DEPLOY_BRANCH" 2>/dev/null || git checkout "$DEPLOY_BRANCH" 2>/dev/null || true
+            fi
         else
             echo "No GITHUB_REPO_URL found - Git operations will be local only"
         fi
