@@ -6,8 +6,28 @@ import os
 import psutil
 import requests
 import re
+import logging
 from flask import Flask, jsonify, Response
 from config import Channels, WEBHOOK_URL, THREAD_ID
+from git_manager import initialize_git_manager, git_log_manager
+
+# Configure logging for the main application
+def setup_logging():
+    """Configure logging to write to app.log and console"""
+    # Only configure if not already configured
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler('app.log', encoding='utf-8', mode='a'),
+                logging.StreamHandler()
+            ]
+        )
+
+# Setup logging
+setup_logging()
+logger = logging.getLogger('DisgramMain')
 
 processes = []
 bot_start_time = None
@@ -176,6 +196,9 @@ def health_check():
     except Exception as e:
         rate_limit_status = {"error": f"Failed to get rate limit status: {str(e)}"}
     
+    # Get Git commit status
+    git_commit_status = git_log_manager.get_commit_status() if git_log_manager else {"git_available": False}
+    
     health_data = {
         "status": "healthy" if is_healthy else "unhealthy",
         "timestamp": last_health_check.isoformat(),
@@ -201,10 +224,12 @@ def health_check():
         },
         "system": system_stats,
         "rate_limiting": rate_limit_status,
+        "git_commits": git_commit_status,
         "configuration": {
             "thread_id_configured": THREAD_ID is not None,
             "webhook_configured": WEBHOOK_URL and "{webhookID}" not in WEBHOOK_URL,
-            "channels_count": len(Channels)
+            "channels_count": len(Channels),
+            "git_commits_configured": git_log_manager is not None
         }
     }
     
@@ -259,6 +284,66 @@ def view_logs():
             mimetype='text/plain'
         )
 
+@app.route('/app-logs')
+def view_app_logs():
+    """View application logs (app.log)"""
+    try:
+        log_file_path = "app.log"
+        
+        if not os.path.exists(log_file_path):
+            return Response(
+                "app.log file not found",
+                status=404,
+                mimetype='text/plain'
+            )
+        
+        with open(log_file_path, 'r', encoding='utf-8') as file:
+            lines = file.readlines()
+            
+        # Show last 500 lines for application logs
+        last_lines = lines[-500:] if len(lines) > 500 else lines
+        
+        log_content = ''.join(last_lines)
+        
+        total_lines = len(lines)
+        showing_lines = len(last_lines)
+        header = f"Disgram Application Log Viewer\n"
+        header += f"Total lines in log: {total_lines}\n"
+        header += f"Showing last {showing_lines} lines\n"
+        header += f"Log file: {os.path.abspath(log_file_path)}\n"
+        header += f"Last modified: {datetime.datetime.fromtimestamp(os.path.getmtime(log_file_path)).isoformat()}\n"
+        header += "=" * 80 + "\n\n"
+        
+        response_content = header + log_content
+        
+        return Response(
+            response_content,
+            mimetype='text/plain',
+            headers={
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Cache-Control': 'no-cache'
+            }
+        )
+        
+    except Exception as e:
+        return Response(
+            f"Error reading application log file: {str(e)}",
+            status=500,
+            mimetype='text/plain'
+        )
+
+@app.route('/force-commit')
+def force_commit():
+    """Endpoint to force immediate commit of all changes to repository"""
+    if not git_log_manager:
+        return jsonify({"error": "Git manager not configured"}), 400
+    
+    success = git_log_manager.force_commit()
+    if success:
+        return jsonify({"message": "All changes committed to repository successfully"})
+    else:
+        return jsonify({"error": "Failed to commit changes to repository"}), 500
+
 @app.route('/')
 def root():
     return jsonify({
@@ -266,6 +351,8 @@ def root():
         "description": "Telegram to Discord messages forwarding bot",
         "health_endpoint": "/health",
         "logs_endpoint": "/logs",
+        "app_logs_endpoint": "/app-logs",
+        "force_commit_endpoint": "/force-commit",
         "channels": len(Channels),
         "status": health_status.get("status", "unknown")
     })
@@ -314,14 +401,19 @@ def run_flask_server():
 if __name__ == "__main__":
     import os
     
+    # Initialize Git manager first
+    initialize_git_manager()
+    
     start_bot_processes()
     
     flask_thread = threading.Thread(target=run_flask_server, daemon=True)
     flask_thread.start()
     
-    print("Disgram bot is running with health check endpoint.")
-    print("Health check available at: /health")
-    print("Log viewer available at: /logs")
+    logger.info("Disgram bot is running with health check endpoint.")
+    logger.info("Health check available at: /health")
+    logger.info("Message log viewer available at: /logs")
+    logger.info("Application log viewer available at: /app-logs") 
+    logger.info("Force commit (all changes) available at: /force-commit")
     
     try:
         while True:
@@ -359,6 +451,12 @@ if __name__ == "__main__":
             
     except KeyboardInterrupt:
         print("\nShutting down all bots...")
+        
+        # Force final commit before shutdown
+        if git_log_manager:
+            logger.info("Performing final commit of all changes to repository...")
+            git_log_manager.force_commit()
+        
         for process in processes:
             if process and process.poll() is None:
                 process.terminate()
