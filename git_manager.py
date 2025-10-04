@@ -328,8 +328,8 @@ class GitLogManager:
             
             # Use different cooldown logic based on commit mode  
             if self.commit_mode == "scheduled":
-                # For scheduled mode, ensure at least 55 minutes between commits
-                min_cooldown = 3300  # 55 minutes
+                # For scheduled mode, ensure at least 45 minutes between commits
+                min_cooldown = 2700  # 45 minutes
                 if time_since_last_commit < min_cooldown:
                     remaining_cooldown = min_cooldown - time_since_last_commit
                     logger.debug(f"Scheduled commit cooldown active: {remaining_cooldown//60:.1f} minutes remaining")
@@ -458,7 +458,7 @@ class GitLogManager:
                     if self._is_scheduled_time():
                         # Check if we haven't committed recently to avoid spam
                         time_since_last_commit = current_time - self.last_commit_time
-                        if time_since_last_commit >= 3300:  # At least 55 minutes since last commit
+                        if time_since_last_commit >= 2700:  # At least 45 minutes since last commit
                             should_commit = True
                             commit_reason = "scheduled"
                         else:

@@ -9,7 +9,12 @@ import re
 import logging
 from flask import Flask, jsonify, Response
 from config import Channels, WEBHOOK_URL, THREAD_ID
-from git_manager import initialize_git_manager, git_log_manager
+from git_manager import initialize_git_manager
+
+def get_git_manager():
+    """Get the current git_log_manager instance (avoids import stale reference issue)"""
+    from git_manager import git_log_manager
+    return git_log_manager
 
 # Configure logging for the main application
 def setup_logging():
@@ -212,7 +217,8 @@ def health_check():
         rate_limit_status = {"error": f"Failed to get rate limit status: {str(e)}"}
     
     # Get Git commit status
-    git_commit_status = git_log_manager.get_commit_status() if git_log_manager else {"git_available": False}
+    git_manager = get_git_manager()
+    git_commit_status = git_manager.get_commit_status() if git_manager else {"git_available": False}
     
     health_data = {
         "status": "healthy" if is_healthy else "unhealthy",
@@ -244,7 +250,7 @@ def health_check():
             "thread_id_configured": THREAD_ID is not None,
             "webhook_configured": WEBHOOK_URL and "{webhookID}" not in WEBHOOK_URL,
             "channels_count": len(Channels),
-            "git_commits_configured": git_log_manager is not None
+            "git_commits_configured": get_git_manager() is not None
         }
     }
     
@@ -351,14 +357,33 @@ def view_app_logs():
 @app.route('/force-commit')
 def force_commit():
     """Endpoint to force immediate commit of all changes to repository"""
-    if not git_log_manager:
+    git_manager = get_git_manager()
+    
+    if not git_manager:
         return jsonify({"error": "Git manager not configured"}), 400
     
-    success = git_log_manager.force_commit()
+    success = git_manager.force_commit()
     if success:
         return jsonify({"message": "All changes committed to repository successfully"})
     else:
         return jsonify({"error": "Failed to commit changes to repository"}), 500
+
+@app.route('/git-status')
+def git_status():
+    """Debug endpoint to check git manager status"""
+    git_manager = get_git_manager()
+    
+    if not git_manager:
+        return jsonify({
+            "configured": False,
+            "error": "Git manager not initialized",
+            "github_token_available": bool(os.getenv("GITHUB_TOKEN")),
+            "commit_interval": os.getenv("LOG_COMMIT_INTERVAL", "2700")
+        })
+    
+    status = git_manager.get_commit_status()
+    status["configured"] = True
+    return jsonify(status)
 
 @app.route('/')
 def root():
@@ -469,9 +494,10 @@ if __name__ == "__main__":
         print("\nShutting down all bots...")
         
         # Force final commit before shutdown
-        if git_log_manager:
+        git_manager = get_git_manager()
+        if git_manager:
             logger.info("Performing final commit of all changes to repository...")
-            git_log_manager.force_commit()
+            git_manager.force_commit()
         
         for process in processes:
             if process and process.poll() is None:
