@@ -31,9 +31,17 @@ jobs:
       
       - name: Install dependencies
         run: pip install -r requirements.txt
+      
+      - name: Ensure Git is available for Azure deployment
+        run: |
+          echo "Git version on build machine: $(git --version)"
+          echo "Git will be configured in Azure Web App via startup script"
         
       # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
 
+      - name: Make startup script executable
+        run: chmod +x startup.sh
+      
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
         with:
