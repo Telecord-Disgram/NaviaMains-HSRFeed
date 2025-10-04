@@ -76,34 +76,52 @@ class GitLogManager:
             logger.error(f"Unexpected error in git configuration: {e}")
     
     def commit_changes(self) -> bool:
-        """Commit and push all changed files to repository"""
-        try:
-            # Check if there are any changes to commit (all files)
-            result = subprocess.run(["git", "status", "--porcelain"], 
-                                   cwd=".", capture_output=True, text=True, check=True)
+        """Commit and push log file changes to repository"""
+        if not self.github_token:
+            logger.debug("No GitHub token configured - skipping commit")
+            return False
             
-            if not result.stdout.strip():
-                logger.debug("No changes to commit")
+        try:
+            # Define the specific log files we want to track
+            log_files = ["Disgram.log", "app.log"]
+            changed_log_files = []
+            
+            # Check which log files have actually changed
+            for log_file in log_files:
+                if os.path.exists(log_file):
+                    # Check if file has changes using git status
+                    result = subprocess.run(["git", "status", "--porcelain", log_file], 
+                                          cwd=".", capture_output=True, text=True)
+                    if result.stdout.strip():  # File has changes
+                        changed_log_files.append(log_file)
+            
+            if not changed_log_files:
+                logger.debug("No log file changes to commit")
                 return True  # No changes is still success
             
-            # Log what files will be committed
-            changed_files = []
-            for line in result.stdout.strip().split('\n'):
-                if line.strip():
-                    # Extract filename from git status output (format: "XY filename")
-                    filename = line[3:].strip()
-                    changed_files.append(filename)
+            # First, try to pull latest changes to avoid conflicts
+            logger.debug("Pulling latest changes before commit...")
+            pull_result = subprocess.run(["git", "pull"], 
+                                       cwd=".", capture_output=True, text=True)
+            if pull_result.returncode != 0:
+                logger.warning(f"Pull failed, continuing with commit: {sanitize_url_for_logging(pull_result.stderr)}")
+            else:
+                logger.debug("Successfully pulled latest changes")
             
-            logger.info(f"Files to be committed: {', '.join(changed_files)}")
+            logger.info(f"Log files to be committed: {', '.join(changed_log_files)}")
             
-            # Add all changes
-            subprocess.run(["git", "add", "."], 
-                          cwd=".", capture_output=True, text=True, check=True)
+            # Add only the specific log files
+            for log_file in changed_log_files:
+                subprocess.run(["git", "add", log_file], 
+                              cwd=".", capture_output=True, text=True, check=True)
             
-            # Create commit with timestamp and file list
+            # Create commit with timestamp and log file list
             timestamp = datetime.now().isoformat()
-            files_summary = f"{len(changed_files)} file(s): {', '.join(changed_files[:3])}" + ("..." if len(changed_files) > 3 else "")
-            commit_message = f"Auto-commit: {files_summary} - {timestamp}"
+            if len(changed_log_files) == 1:
+                commit_message = f"Auto-commit: Update {changed_log_files[0]} - {timestamp}"
+            else:
+                commit_message = f"Auto-commit: Update log files ({', '.join(changed_log_files)}) - {timestamp}"
+            
             subprocess.run(["git", "commit", "-m", commit_message], 
                           cwd=".", capture_output=True, text=True, check=True)
             
@@ -125,8 +143,8 @@ class GitLogManager:
                                               cwd=".", capture_output=True, text=True)
                 
                 if result.returncode == 0:
-                    total_size = sum(os.path.getsize(f) for f in changed_files if os.path.exists(f))
-                    logger.info(f"Successfully committed and pushed {len(changed_files)} file(s) to repository (total size: {total_size} bytes)")
+                    total_size = sum(os.path.getsize(f) for f in log_files if os.path.exists(f))
+                    logger.info(f"Successfully committed and pushed {len(changed_log_files)} log file(s) to repository (total size: {total_size} bytes)")
                     self.last_commit_time = time.time()
                     return True
                 else:
@@ -149,16 +167,29 @@ class GitLogManager:
     def pull_latest_log(self) -> bool:
         """Pull the latest version of the repository to get updated log file"""
         try:
+            # Get current branch name
+            branch_result = subprocess.run(["git", "branch", "--show-current"], 
+                                         cwd=".", capture_output=True, text=True)
+            if branch_result.returncode != 0:
+                logger.error("Could not determine current branch")
+                return False
+                
+            current_branch = branch_result.stdout.strip()
+            
             # First, stash any local changes to avoid conflicts
             subprocess.run(["git", "stash", "push", "-m", "Auto-stash before pull"], 
                           cwd=".", capture_output=True, text=True)
             
-            # Pull latest changes
-            result = subprocess.run(["git", "pull"], 
-                                   cwd=".", capture_output=True, text=True, check=True)
+            # Try to pull with explicit branch
+            result = subprocess.run(["git", "pull", "origin", current_branch], 
+                                   cwd=".", capture_output=True, text=True)
             
-            logger.info("Successfully pulled latest repository state")
-            return True
+            if result.returncode == 0:
+                logger.info("Successfully pulled latest repository state")
+                return True
+            else:
+                logger.warning(f"Pull failed: {sanitize_url_for_logging(result.stderr)}")
+                return False
             
         except subprocess.CalledProcessError as e:
             logger.error(f"Error pulling repository: {e}")
