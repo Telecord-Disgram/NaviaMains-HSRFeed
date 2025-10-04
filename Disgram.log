@@ -126,3 +126,13 @@ https://t.me/Team_Gemberry78/1534
 2025-10-04 11:49:07 Bot working for stepleaker. Time passed: 0:00:01.175013
 2025-10-04 11:49:07 Bot working for Galaxy_leak. Time passed: 0:00:00.886447
 2025-10-04 11:49:07 Bot working for Seele_WW_Leak. Time passed: 0:00:00.949332
+2025-10-04 11:52:55 Bot working for Seele_WW_Leak. Time passed: 0:00:02.103779
+2025-10-04 11:52:55 Bot working for stepleaker. Time passed: 0:00:02.228528
+2025-10-04 11:53:02 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/Galaxy_leak (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7ac418a6cd10>, 'Connection to t.me timed out. (connect timeout=10)'))
+2025-10-04 11:53:02 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/hakush_in (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x70e7b98fc980>, 'Connection to t.me timed out. (connect timeout=10)'))
+2025-10-04 11:53:02 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/disgramtest (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7aff89c62fc0>, 'Connection to t.me timed out. (connect timeout=10)'))
+2025-10-04 11:53:02 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/Team_Gemberry78 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7b0f5303efc0>, 'Connection to t.me timed out. (connect timeout=10)'))
+2025-10-04 11:53:05 Bot working for disgramtest. Time passed: 0:00:12.619546
+2025-10-04 11:53:05 Bot working for Galaxy_leak. Time passed: 0:00:12.880075
+2025-10-04 11:53:05 Bot working for hakush_in. Time passed: 0:00:12.782602
+2025-10-04 11:53:05 Bot working for Team_Gemberry78. Time passed: 0:00:12.781132
