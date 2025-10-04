@@ -54,3 +54,15 @@ https://t.me/Team_Gemberry78/1534
 2025-10-04 11:16:02 Bot working for Galaxy_leak. Time passed: 0:00:00.825656
 2025-10-04 11:16:02 Bot working for Seele_WW_Leak. Time passed: 0:00:00.950608
 2025-10-04 11:16:02 Bot working for stepleaker. Time passed: 0:00:00.952796
+2025-10-04 11:19:26 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/Seele_WW_Leak (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x71c85a156030>: Failed to resolve 't.me' ([Errno -3] Temporary failure in name resolution)"))
+2025-10-04 11:19:26 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/hakush_in (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x77f8f48c8530>: Failed to resolve 't.me' ([Errno -3] Temporary failure in name resolution)"))
+2025-10-04 11:19:26 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/Galaxy_leak (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x75583e215100>: Failed to resolve 't.me' ([Errno -3] Temporary failure in name resolution)"))
+2025-10-04 11:19:26 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/stepleaker (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x7f28f34dde20>: Failed to resolve 't.me' ([Errno -3] Temporary failure in name resolution)"))
+2025-10-04 11:19:26 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/Team_Gemberry78 (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x7577c5a2d100>: Failed to resolve 't.me' ([Errno -3] Temporary failure in name resolution)"))
+2025-10-04 11:19:26 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/disgramtest (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x710b4f2aabd0>: Failed to resolve 't.me' ([Errno -3] Temporary failure in name resolution)"))
+2025-10-04 11:19:28 Bot working for disgramtest. Time passed: 0:00:32.930329
+2025-10-04 11:19:29 Bot working for hakush_in. Time passed: 0:00:33.095816
+2025-10-04 11:19:29 Bot working for Team_Gemberry78. Time passed: 0:00:33.127387
+2025-10-04 11:19:29 Bot working for Galaxy_leak. Time passed: 0:00:33.175320
+2025-10-04 11:19:29 Bot working for Seele_WW_Leak. Time passed: 0:00:33.257563
+2025-10-04 11:19:29 Bot working for stepleaker. Time passed: 0:00:33.343789
