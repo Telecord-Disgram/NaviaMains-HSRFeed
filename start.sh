@@ -37,6 +37,12 @@ if command -v git &> /dev/null; then
     git config --global user.email "disgram@bot.local" 2>/dev/null || true
     git config --global init.defaultBranch "$DEFAULT_BRANCH" 2>/dev/null || true
     
+    # Configure token-based authentication if token is available
+    if [ ! -z "$GITHUB_TOKEN" ]; then
+        echo "Configuring Git authentication with GitHub token..."
+        git config --global credential.helper "!f() { echo \"username=\$GITHUB_TOKEN\"; echo \"password=\"; }; f" 2>/dev/null || true
+    fi
+    
     # Check if we're in a Git repository
     if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         echo "No Git repository found - initializing repository..."
@@ -44,45 +50,56 @@ if command -v git &> /dev/null; then
         # Initialize Git repository
         git init .
         
+        # Initialize as fresh repository first
+        echo "Initializing fresh Git repository..."
+        
         # Add GitHub remote if repository URL is available
         if [ ! -z "$GITHUB_REPO_URL" ]; then
-            if [ ! -z "$GITHUB_TOKEN" ]; then
-                echo "Adding GitHub remote with authentication..."
-                # Extract repo path from URL and add token authentication
-                REPO_PATH=$(echo "$GITHUB_REPO_URL" | sed 's|https://github.com/||')
-                git remote add origin "https://${GITHUB_TOKEN}@github.com/${REPO_PATH}"
-            else
-                echo "Adding GitHub remote without authentication..."
-                git remote add origin "$GITHUB_REPO_URL"
-            fi
+            echo "Adding GitHub remote (clean URL)..."
+            git remote add origin "$GITHUB_REPO_URL"
             
-            # Try to fetch and checkout the deployment branch
+            # Try to fetch and sync with remote repository
             DEPLOY_BRANCH=${GITHUB_DEPLOY_BRANCH:-azure-prod}
-            echo "Fetching ${DEPLOY_BRANCH} branch..."
+            echo "Attempting to sync with remote ${DEPLOY_BRANCH} branch..."
             
             # Configure git pull strategy to avoid warnings
             git config pull.rebase false 2>/dev/null || true
             
-            # Fetch all branches
-            git fetch origin 2>/dev/null || echo "Could not fetch remote branches"
-            
-            # Checkout or create the deployment branch
-            if git show-ref --verify --quiet "refs/remotes/origin/$DEPLOY_BRANCH"; then
-                echo "Remote branch $DEPLOY_BRANCH exists, checking out..."
-                git checkout -b "$DEPLOY_BRANCH" "origin/$DEPLOY_BRANCH" 2>/dev/null || git checkout "$DEPLOY_BRANCH" 2>/dev/null || true
+            # Try to fetch the remote branch
+            if git fetch origin "$DEPLOY_BRANCH" 2>/dev/null; then
+                echo "Remote branch $DEPLOY_BRANCH found, syncing..."
+                
+                # Reset the local repository to match remote exactly
+                git reset --hard "origin/$DEPLOY_BRANCH" 2>/dev/null || true
+                git checkout -B "$DEPLOY_BRANCH" 2>/dev/null || true
+                
                 # Set upstream tracking
                 git branch --set-upstream-to="origin/$DEPLOY_BRANCH" "$DEPLOY_BRANCH" 2>/dev/null || true
+                
+                echo "Successfully synced with remote $DEPLOY_BRANCH branch"
             else
-                echo "Remote branch $DEPLOY_BRANCH not found, creating local branch..."
-                git checkout -b "$DEPLOY_BRANCH" 2>/dev/null || git checkout "$DEPLOY_BRANCH" 2>/dev/null || true
+                echo "Remote branch $DEPLOY_BRANCH not found, will create it..."
+                
+                # Create the branch locally and add current files
+                git checkout -b "$DEPLOY_BRANCH" 2>/dev/null || true
+                
+                # Add current application files
+                git add . 2>/dev/null || true
+                git commit -m "Initial commit from Azure deployment" 2>/dev/null || true
+                
+                # Try to push to create remote branch
+                if [ ! -z "$GITHUB_TOKEN" ]; then
+                    echo "Creating remote branch..."
+                    git push --set-upstream origin "$DEPLOY_BRANCH" 2>/dev/null || echo "Could not create remote branch (will work locally)"
+                fi
             fi
         else
             echo "No GITHUB_REPO_URL found - Git operations will be local only"
+            
+            # Just add current files for local tracking
+            git add . 2>/dev/null || true
+            git commit -m "Initial local commit" 2>/dev/null || true
         fi
-        
-        # Add current files to git
-        git add . 2>/dev/null || true
-        git commit -m "Initial commit from Azure deployment" 2>/dev/null || true
         
         echo "Git repository initialized successfully"
     else
