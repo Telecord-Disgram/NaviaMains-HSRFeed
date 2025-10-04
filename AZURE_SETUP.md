@@ -8,23 +8,51 @@ To enable Git functionality for the Disgram application on Azure Web App, you ne
 
 1. **Go to Azure Portal** → Your Web App (`disgram`)
 
-2. **Navigate to Configuration** → **General settings**
+2. **Configure Environment Variables** in Configuration → Application Settings:
+   
+   **Required for Git functionality:**
+   - **Name**: `GITHUB_TOKEN`
+   - **Value**: `ghp_your_personal_access_token_here`
+   
+   - **Name**: `GITHUB_REPO_URL`
+   - **Value**: `https://github.com/SimpNick6703/Disgram.git`
+   
+   - **Name**: `GITHUB_DEPLOY_BRANCH`
+   - **Value**: `azure-prod`
+   
+   **Optional:**
+   - **Name**: `LOG_COMMIT_INTERVAL`
+   - **Value**: `2700` (45 minutes in seconds)
 
-3. **Set Startup Command** to:
+3. **Navigate to Configuration** → **General settings**
+
+4. **Set Startup Command** to:
    ```bash
-   bash startup.sh
+   bash start.sh
    ```
 
-4. **Save** the configuration
+5. **Save** the configuration
 
-5. **Restart** the Web App
+6. **Restart** the Web App
 
 ### What the startup script does:
 
-- ✅ Attempts to install Git if not available
+- ✅ Installs Git if not available
+- ✅ Initializes Git repository if missing
+- ✅ Configures GitHub remote using environment variables
+- ✅ Sets up the correct deployment branch
 - ✅ Configures Git with bot credentials
 - ✅ Starts the Python application
 - ✅ Gracefully handles Git unavailability
+
+### Environment Variables Configuration
+
+The application now uses environment variables for Git configuration, making it more flexible and secure:
+
+- **`GITHUB_REPO_URL`**: Your repository URL (supports any GitHub repository)
+- **`GITHUB_DEPLOY_BRANCH`**: The branch to deploy from (e.g., `main`, `azure-prod`, `production`)
+- **`GITHUB_TOKEN`**: Personal access token for authentication
+- **`LOG_COMMIT_INTERVAL`**: How often to commit log changes (in seconds)
 
 ### Alternative: Manual Git Installation
 
