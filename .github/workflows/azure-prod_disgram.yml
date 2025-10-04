@@ -40,7 +40,7 @@ jobs:
       # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
 
       - name: Make startup script executable
-        run: chmod +x startup.sh
+        run: chmod +x start.sh
       
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
