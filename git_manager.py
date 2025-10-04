@@ -31,10 +31,24 @@ def sanitize_url_for_logging(url: str) -> str:
 class GitLogManager:
     def __init__(self, github_token: Optional[str] = None, commit_interval: int = 2700):
         self.github_token = github_token
-        self.commit_interval = commit_interval  # 45 minutes in seconds
+        self.commit_interval = commit_interval  # For interval mode
         self.local_log_path = "Disgram.log"
-        self.last_commit_time = 0
         self.commit_lock = threading.Lock()
+        
+        # Commit mode configuration
+        self.commit_mode = os.getenv("COMMIT_MODE", "interval").lower()
+        self.commit_schedule = os.getenv("COMMIT_SCHEDULE", "hourly").lower()
+        self.custom_hours = self._parse_custom_hours(os.getenv("COMMIT_CUSTOM_HOURS", "0,6,12,18"))
+        self.startup_grace = int(os.getenv("STARTUP_GRACE_PERIOD", "600"))
+        
+        # Initialize last_commit_time by checking recent Git history
+        self.last_commit_time = self._get_last_commit_time()
+        
+        # Add startup grace period to prevent immediate commits
+        current_time = time.time()
+        if (current_time - self.last_commit_time) < self.startup_grace:
+            logger.info(f"Recent commit detected, extending cooldown by {self.startup_grace//60} minutes")
+            self.last_commit_time = current_time  # Reset to prevent immediate commit
         
         # Configure git if token is provided
         if self.github_token:
@@ -44,7 +58,89 @@ class GitLogManager:
         self.commit_thread = threading.Thread(target=self._background_commit, daemon=True)
         self.commit_thread.start()
         
-        logger.info(f"GitLogManager initialized - commit interval: {commit_interval//60} minutes")
+        # Log initialization details
+        if self.commit_mode == "scheduled":
+            schedule_desc = self._get_schedule_description()
+            logger.info(f"GitLogManager initialized - mode: scheduled ({schedule_desc}), last commit: {(current_time - self.last_commit_time)//60:.1f} minutes ago")
+        else:
+            logger.info(f"GitLogManager initialized - mode: interval ({commit_interval//60} minutes), last commit: {(current_time - self.last_commit_time)//60:.1f} minutes ago")
+    
+    def _parse_custom_hours(self, hours_str: str) -> list:
+        """Parse custom hours from environment variable"""
+        try:
+            hours = [int(h.strip()) for h in hours_str.split(',') if h.strip()]
+            return [h for h in hours if 0 <= h <= 23]  # Validate range
+        except (ValueError, AttributeError):
+            logger.warning(f"Invalid COMMIT_CUSTOM_HOURS format: {hours_str}, using default")
+            return [0, 6, 12, 18]
+    
+    def _get_schedule_description(self) -> str:
+        """Get human-readable schedule description"""
+        if self.commit_schedule == "hourly":
+            return "every hour"
+        elif self.commit_schedule == "every_2h":
+            return "every 2 hours"
+        elif self.commit_schedule == "custom":
+            return f"at hours: {', '.join(map(str, sorted(self.custom_hours)))}"
+        else:
+            return "hourly (fallback)"
+    
+    def _get_next_scheduled_time(self) -> Optional[float]:
+        """Get the next scheduled commit time in UTC timestamp"""
+        from datetime import datetime, timezone, timedelta
+        
+        now_utc = datetime.now(timezone.utc)
+        current_hour = now_utc.hour
+        current_minute = now_utc.minute
+        
+        # Determine target hours based on schedule
+        if self.commit_schedule == "hourly":
+            target_hours = list(range(24))  # Every hour
+        elif self.commit_schedule == "every_2h":
+            target_hours = list(range(0, 24, 2))  # 0, 2, 4, 6, ..., 22
+        elif self.commit_schedule == "custom":
+            target_hours = sorted(self.custom_hours)
+        else:
+            target_hours = list(range(24))  # Fallback to hourly
+        
+        # Find next scheduled hour
+        next_hour = None
+        for hour in target_hours:
+            if hour > current_hour or (hour == current_hour and current_minute < 5):
+                # Allow 5-minute window at the start of each hour
+                next_hour = hour
+                break
+        
+        if next_hour is None:
+            # No more hours today, get first hour of tomorrow
+            next_hour = target_hours[0]
+            now_utc += timedelta(days=1)
+        
+        # Create next scheduled time (at the start of the hour)
+        next_time = now_utc.replace(hour=next_hour, minute=0, second=0, microsecond=0)
+        return next_time.timestamp()
+    
+    def _is_scheduled_time(self) -> bool:
+        """Check if current time matches scheduled commit time"""
+        from datetime import datetime, timezone
+        
+        now_utc = datetime.now(timezone.utc)
+        current_hour = now_utc.hour
+        current_minute = now_utc.minute
+        
+        # Only commit in the first 5 minutes of the scheduled hour
+        if current_minute >= 5:
+            return False
+        
+        # Determine if current hour is scheduled
+        if self.commit_schedule == "hourly":
+            return True  # Every hour
+        elif self.commit_schedule == "every_2h":
+            return current_hour % 2 == 0  # Even hours only
+        elif self.commit_schedule == "custom":
+            return current_hour in self.custom_hours
+        else:
+            return True  # Fallback to hourly
     
     def _configure_git_auth(self):
         """Configure git authentication using GitHub token"""
@@ -85,6 +181,40 @@ class GitLogManager:
             logger.error(f"Error configuring git authentication: {e}")
         except Exception as e:
             logger.error(f"Unexpected error in git configuration: {e}")
+    
+    def _get_last_commit_time(self) -> float:
+        """Get the timestamp of the last auto-commit to determine cooldown"""
+        try:
+            # Get the last commit that was an auto-commit (our commits start with "Auto-commit:")
+            result = subprocess.run([
+                "git", "log", "--grep=^Auto-commit:", "--format=%ct", "-1"
+            ], cwd=".", capture_output=True, text=True)
+            
+            if result.returncode == 0 and result.stdout.strip():
+                last_auto_commit_time = float(result.stdout.strip())
+                logger.debug(f"Found last auto-commit at {datetime.fromtimestamp(last_auto_commit_time)}")
+                return last_auto_commit_time
+            else:
+                # No auto-commits found, check for any recent commits in the last 24 hours
+                one_day_ago = int(time.time()) - 86400
+                result = subprocess.run([
+                    "git", "log", f"--since={one_day_ago}", "--format=%ct", "-1"
+                ], cwd=".", capture_output=True, text=True)
+                
+                if result.returncode == 0 and result.stdout.strip():
+                    recent_commit_time = float(result.stdout.strip())
+                    logger.debug(f"Found recent commit at {datetime.fromtimestamp(recent_commit_time)}")
+                    return recent_commit_time
+                else:
+                    logger.debug("No recent commits found, using current time minus interval")
+                    return time.time() - self.commit_interval
+                    
+        except (subprocess.CalledProcessError, ValueError) as e:
+            logger.debug(f"Could not determine last commit time: {e}")
+            return time.time() - self.commit_interval  # Safe fallback
+        except Exception as e:
+            logger.debug(f"Unexpected error getting last commit time: {e}")
+            return time.time() - self.commit_interval  # Safe fallback
     
     def _sync_with_remote(self) -> bool:
         """Safely sync with remote repository, handling branch tracking issues"""
@@ -185,11 +315,31 @@ class GitLogManager:
             logger.error(f"Unexpected error during push: {e}")
             return False
     
-    def commit_changes(self) -> bool:
+    def commit_changes(self, force: bool = False) -> bool:
         """Commit and push log file changes to repository"""
         if not self.github_token:
             logger.debug("No GitHub token configured - skipping commit")
             return False
+        
+        # Safety check: respect cooldown period unless this is a force commit
+        if not force:
+            current_time = time.time()
+            time_since_last_commit = current_time - self.last_commit_time
+            
+            # Use different cooldown logic based on commit mode  
+            if self.commit_mode == "scheduled":
+                # For scheduled mode, ensure at least 55 minutes between commits
+                min_cooldown = 3300  # 55 minutes
+                if time_since_last_commit < min_cooldown:
+                    remaining_cooldown = min_cooldown - time_since_last_commit
+                    logger.debug(f"Scheduled commit cooldown active: {remaining_cooldown//60:.1f} minutes remaining")
+                    return False
+            else:
+                # For interval mode, use the configured interval
+                if time_since_last_commit < self.commit_interval:
+                    remaining_cooldown = self.commit_interval - time_since_last_commit
+                    logger.debug(f"Interval commit cooldown active: {remaining_cooldown//60:.1f} minutes remaining")
+                    return False
             
         try:
             # Define the specific log files we want to track
@@ -294,28 +444,81 @@ class GitLogManager:
             return False
     
     def _background_commit(self):
-        """Background thread to periodically commit log file"""
+        """Background thread to periodically commit log file using interval or scheduled mode"""
         while True:
             try:
                 time.sleep(60)  # Check every minute
                 
                 current_time = time.time()
-                if (current_time - self.last_commit_time) >= self.commit_interval:
+                should_commit = False
+                commit_reason = ""
+                
+                if self.commit_mode == "scheduled":
+                    # Scheduled mode: commit at specific UTC times
+                    if self._is_scheduled_time():
+                        # Check if we haven't committed recently to avoid spam
+                        time_since_last_commit = current_time - self.last_commit_time
+                        if time_since_last_commit >= 3300:  # At least 55 minutes since last commit
+                            should_commit = True
+                            commit_reason = "scheduled"
+                        else:
+                            from datetime import datetime, timezone
+                            now_utc = datetime.now(timezone.utc)
+                            logger.info(f"Scheduled commit time ({now_utc.hour:02d}:00 UTC) but recent commit detected, skipping")
+                    
+                    # Log next scheduled time occasionally
+                    if int(current_time) % 600 == 0:  # Every 10 minutes
+                        next_time = self._get_next_scheduled_time()
+                        if next_time:
+                            from datetime import datetime, timezone
+                            next_dt = datetime.fromtimestamp(next_time, timezone.utc)
+                            logger.debug(f"Next scheduled commit: {next_dt.strftime('%H:%M UTC')}")
+                
+                else:
+                    # Interval mode: commit after fixed intervals
+                    time_since_last_commit = current_time - self.last_commit_time
+                    if time_since_last_commit >= self.commit_interval:
+                        should_commit = True
+                        commit_reason = f"interval ({time_since_last_commit//60:.1f} minutes)"
+                    else:
+                        # Log the countdown occasionally (every 10 minutes)  
+                        if int(time_since_last_commit) % 600 == 0:
+                            time_until_next = self.commit_interval - time_since_last_commit
+                            logger.debug(f"Next interval commit in {time_until_next//60:.1f} minutes")
+                
+                # Execute commit if conditions are met
+                if should_commit:
                     with self.commit_lock:
-                        # Check if there are any changes to commit
-                        result = subprocess.run(["git", "status", "--porcelain"], 
-                                               cwd=".", capture_output=True, text=True)
-                        if result.returncode == 0 and result.stdout.strip():
-                            logger.info(f"Background commit: Committing changed files to repository...")
-                            self.commit_changes()
+                        # Check if there are specific log file changes to commit
+                        log_files = ["Disgram.log", "app.log"]
+                        has_log_changes = False
+                        
+                        for log_file in log_files:
+                            if os.path.exists(log_file):
+                                result = subprocess.run(["git", "status", "--porcelain", log_file], 
+                                                       cwd=".", capture_output=True, text=True)
+                                if result.returncode == 0 and result.stdout.strip():
+                                    has_log_changes = True
+                                    break
+                        
+                        if has_log_changes:
+                            logger.info(f"Background commit triggered by {commit_reason}, committing log changes...")
+                            success = self.commit_changes()
+                            if success:
+                                logger.info(f"Background commit completed successfully ({commit_reason})")
+                            else:
+                                logger.warning(f"Background commit failed ({commit_reason})")
+                        else:
+                            logger.debug(f"Background commit: No log file changes detected, skipping {commit_reason} commit")
                         
             except Exception as e:
                 logger.error(f"Background commit error: {e}")
     
     def force_commit(self) -> bool:
-        """Force immediate commit to repository"""
+        """Force immediate commit to repository, bypassing cooldown"""
         with self.commit_lock:
-            return self.commit_changes()
+            logger.info("Force commit requested, bypassing cooldown period")
+            return self.commit_changes(force=True)
     
     def get_commit_status(self) -> dict:
         """Get commit status for health monitoring"""
@@ -335,21 +538,51 @@ class GitLogManager:
                 last_commit_date = "never"
                 last_commit_message = "No commits found"
             
+            current_time = time.time()
+            time_since_commit = current_time - self.last_commit_time
+            
+            # Calculate next commit timing based on mode
+            if self.commit_mode == "scheduled":
+                next_scheduled = self._get_next_scheduled_time()
+                next_commit_info = {
+                    "mode": "scheduled",
+                    "schedule": self._get_schedule_description(),
+                    "next_commit_timestamp": next_scheduled,
+                    "next_commit_in_seconds": max(0, next_scheduled - current_time) if next_scheduled else None
+                }
+                
+                # Add current UTC time info
+                from datetime import datetime, timezone
+                now_utc = datetime.now(timezone.utc)
+                next_commit_info["current_utc"] = now_utc.strftime("%H:%M UTC")
+                if next_scheduled:
+                    next_dt = datetime.fromtimestamp(next_scheduled, timezone.utc)
+                    next_commit_info["next_commit_utc"] = next_dt.strftime("%H:%M UTC")
+            else:
+                next_commit_info = {
+                    "mode": "interval",
+                    "interval_minutes": self.commit_interval // 60,
+                    "next_commit_in_seconds": max(0, self.commit_interval - time_since_commit)
+                }
+            
             return {
                 "git_available": True,
+                "commit_mode": self.commit_mode,
                 "last_commit_time": self.last_commit_time,
-                "time_since_commit": time.time() - self.last_commit_time,
-                "next_commit_in": max(0, self.commit_interval - (time.time() - self.last_commit_time)),
+                "time_since_commit_seconds": time_since_commit,
+                "time_since_commit_minutes": time_since_commit // 60,
                 "last_commit_hash": last_commit_hash,
                 "last_commit_date": last_commit_date,
                 "last_commit_message": last_commit_message,
-                "github_token_configured": self.github_token is not None
+                "github_token_configured": self.github_token is not None,
+                **next_commit_info
             }
             
         except Exception as e:
             return {
                 "git_available": False,
                 "error": str(e),
+                "commit_mode": self.commit_mode,
                 "last_commit_time": self.last_commit_time,
                 "github_token_configured": self.github_token is not None
             }
