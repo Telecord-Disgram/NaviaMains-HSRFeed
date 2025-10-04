@@ -32,7 +32,7 @@ if command -v git &> /dev/null; then
     echo "Git available: $(git --version)"
     git config --global user.name "Disgram Bot" 2>/dev/null || true
     git config --global user.email "disgram@bot.local" 2>/dev/null || true
-    git config --global init.defaultBranch main 2>/dev/null || true
+    git config --global init.defaultBranch azure-prod 2>/dev/null || true
 else
     echo "Warning: Git not available - Git commit functionality will be disabled"
 fi
