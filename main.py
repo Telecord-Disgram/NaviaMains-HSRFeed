@@ -307,7 +307,7 @@ def view_logs():
 
 @app.route('/logs/clear', methods=['POST'])
 def clear_disgram_log():
-    """Clear the contents of Disgram.log while preserving channel links"""
+    """Clear the contents of Disgram.log while preserving latest message links for each channel"""
     try:
         log_file_path = "Disgram.log"
         
@@ -317,33 +317,43 @@ def clear_disgram_log():
                 "message": "Disgram.log file not found"
             }), 404
         
-        # Read the file and extract channel links and header
+        # Read the file and extract the latest message link for each channel
         header_line = None
-        channel_links = []
+        latest_messages = {}  # Dictionary to store latest message per channel
         
         with open(log_file_path, 'r', encoding='utf-8') as log_file:
             for line in log_file:
-                line = line.strip()
+                line_stripped = line.strip()
                 # Preserve the header line
-                if "Add your message links" in line or line == "Add your message links from the point you wish to start from or leave it blank.":
-                    header_line = line
-                # Preserve channel links
-                elif line.startswith("https://t.me/"):
-                    channel_links.append(line)
+                if "Add your message links" in line_stripped:
+                    header_line = line_stripped
+                
+                # Extract all message links from the line (from log entries)
+                matches = re.findall(r'https://t\.me/([^/\s]+)/(\d+)', line)
+                for channel, msg_num in matches:
+                    msg_num = int(msg_num)
+                    # Keep only the latest message number for each channel
+                    if channel not in latest_messages or msg_num > latest_messages[channel]:
+                        latest_messages[channel] = msg_num
         
-        # Write back only the header and channel links
+        # Convert to sorted list of full URLs
+        channel_links = [f"https://t.me/{channel}/{msg_num}" 
+                        for channel, msg_num in sorted(latest_messages.items())]
+        
+        # Write back only the header and latest channel links
         with open(log_file_path, 'w', encoding='utf-8') as log_file:
             if header_line:
                 log_file.write(f"{header_line}\n")
             for link in channel_links:
                 log_file.write(f"{link}\n")
         
-        logger.info("Disgram.log cleared successfully, preserving channel links")
+        logger.info(f"Disgram.log cleared successfully, preserving {len(channel_links)} latest channel links")
         
         return jsonify({
             "status": "success",
             "message": "Disgram.log cleared successfully",
-            "preserved_links": len(channel_links)
+            "preserved_links": len(channel_links),
+            "latest_messages": channel_links
         })
         
     except Exception as e:

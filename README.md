@@ -187,18 +187,33 @@ Access application logs via the `/logs` endpoint:
 
 ## Log Management
 
-Clear the contents of `Disgram.log` while preserving channel links via the `/logs/clear` endpoint:
+Clear the contents of `Disgram.log` while preserving the latest message links via the `/logs/clear` endpoint:
 - **URL**: `http://localhost:5000/logs/clear` (or your server's address)
 - **Method**: POST
-- **Returns**: JSON response with status and number of preserved channel links
+- **Returns**: JSON response with status, number of preserved channel links, and the latest message URLs
 - **Features**: 
   - Removes all timestamped log entries
-  - Preserves the header line and channel starting points
-  - Useful for managing log file size
+  - Preserves the header line
+  - Extracts and preserves the **latest** message link for each channel (not the initial starting points)
+  - Useful for managing log file size while maintaining progress
 
 **Example:**
 ```bash
 curl -X POST http://localhost:5000/logs/clear
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Disgram.log cleared successfully",
+  "preserved_links": 9,
+  "latest_messages": [
+    "https://t.me/Galaxy_leak/3649",
+    "https://t.me/Seele_WW_Leak/3728",
+    "..."
+  ]
+}
 ```
 
 ## Notes
