@@ -305,6 +305,54 @@ def view_logs():
             mimetype='text/plain'
         )
 
+@app.route('/logs/clear', methods=['POST'])
+def clear_disgram_log():
+    """Clear the contents of Disgram.log while preserving channel links"""
+    try:
+        log_file_path = "Disgram.log"
+        
+        if not os.path.exists(log_file_path):
+            return jsonify({
+                "status": "error",
+                "message": "Disgram.log file not found"
+            }), 404
+        
+        # Read the file and extract channel links and header
+        header_line = None
+        channel_links = []
+        
+        with open(log_file_path, 'r', encoding='utf-8') as log_file:
+            for line in log_file:
+                line = line.strip()
+                # Preserve the header line
+                if "Add your message links" in line or line == "Add your message links from the point you wish to start from or leave it blank.":
+                    header_line = line
+                # Preserve channel links
+                elif line.startswith("https://t.me/"):
+                    channel_links.append(line)
+        
+        # Write back only the header and channel links
+        with open(log_file_path, 'w', encoding='utf-8') as log_file:
+            if header_line:
+                log_file.write(f"{header_line}\n")
+            for link in channel_links:
+                log_file.write(f"{link}\n")
+        
+        logger.info("Disgram.log cleared successfully, preserving channel links")
+        
+        return jsonify({
+            "status": "success",
+            "message": "Disgram.log cleared successfully",
+            "preserved_links": len(channel_links)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error clearing Disgram.log: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": f"Error clearing log file: {str(e)}"
+        }), 500
+
 @app.route('/app-logs')
 def view_app_logs():
     """View application logs (app.log)"""

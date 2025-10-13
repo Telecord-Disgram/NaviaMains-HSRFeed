@@ -185,6 +185,22 @@ Access application logs via the `/logs` endpoint:
 - **Returns**: Recent log entries from `Disgram.log`
 - **Features**: Real-time log viewing for debugging and monitoring
 
+## Log Management
+
+Clear the contents of `Disgram.log` while preserving channel links via the `/logs/clear` endpoint:
+- **URL**: `http://localhost:5000/logs/clear` (or your server's address)
+- **Method**: POST
+- **Returns**: JSON response with status and number of preserved channel links
+- **Features**: 
+  - Removes all timestamped log entries
+  - Preserves the header line and channel starting points
+  - Useful for managing log file size
+
+**Example:**
+```bash
+curl -X POST http://localhost:5000/logs/clear
+```
+
 ## Notes
 
 - **Rate Limiting**: Discord rate limits are handled automatically with intelligent retry logic but be mindful of Telegram Preview Page's rates as well, in order to avoid IP bans.
