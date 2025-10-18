@@ -412,7 +412,7 @@ def view_app_logs():
             mimetype='text/plain'
         )
 
-@app.route('/force-commit')
+@app.route('/force-commit', methods=['POST'])
 def force_commit():
     """Endpoint to force immediate commit of all changes to repository"""
     git_manager = get_git_manager()
@@ -451,7 +451,7 @@ def root():
         "health_endpoint": "/health",
         "logs_endpoint": "/logs",
         "app_logs_endpoint": "/app-logs",
-        "force_commit_endpoint": "/force-commit",
+        "git-status_endpoint": "/git-status",
         "channels": len(Channels),
         "status": health_status.get("status", "unknown")
     })
@@ -568,4 +568,5 @@ if __name__ == "__main__":
                 except subprocess.TimeoutExpired:
                     process.kill()
         
+
         print("All bots have been stopped.")
