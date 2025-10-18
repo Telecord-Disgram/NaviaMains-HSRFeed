@@ -7,6 +7,7 @@ import psutil
 import requests
 import re
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Flask, jsonify, Response
 from config import Channels, WEBHOOK_URL, THREAD_ID
 from git_manager import initialize_git_manager
@@ -185,17 +186,54 @@ def health_check():
     global last_health_check
     last_health_check = datetime.datetime.now()
     
-    alive_count, dead_processes = check_process_health()
+    # Define wrapper functions for async execution
+    def get_process_health():
+        return check_process_health()
+    
+    def get_telegram_status():
+        return check_telegram_connectivity()
+    
+    def get_discord_status():
+        return check_discord_webhook()
+    
+    def get_log_status():
+        return check_log_freshness()
+    
+    def get_sys_stats():
+        return get_system_stats()
+    
+    def get_rate_limit():
+        try:
+            from rate_limiter import discord_rate_limiter
+            return discord_rate_limiter.get_rate_limit_status()
+        except Exception as e:
+            return {"error": f"Failed to get rate limit status: {str(e)}"}
+    
+    def get_git_status():
+        git_manager = get_git_manager()
+        return git_manager.get_commit_status() if git_manager else {"git_available": False}
+    
+    # Execute all checks in parallel using ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=7) as executor:
+        # Submit all tasks
+        future_process_health = executor.submit(get_process_health)
+        future_telegram = executor.submit(get_telegram_status)
+        future_discord = executor.submit(get_discord_status)
+        future_log = executor.submit(get_log_status)
+        future_system = executor.submit(get_sys_stats)
+        future_rate_limit = executor.submit(get_rate_limit)
+        future_git = executor.submit(get_git_status)
+        
+        # Collect results
+        alive_count, dead_processes = future_process_health.result()
+        telegram_ok = future_telegram.result()
+        discord_ok, discord_msg = future_discord.result()
+        log_fresh, log_msg, log_last_modified = future_log.result()
+        system_stats = future_system.result()
+        rate_limit_status = future_rate_limit.result()
+        git_commit_status = future_git.result()
+    
     total_processes = len(processes)
-    
-    telegram_ok = check_telegram_connectivity()
-    discord_ok, discord_msg = check_discord_webhook()
-    
-    # Check log freshness (critical for detecting zombie processes)
-    log_fresh, log_msg, log_last_modified = check_log_freshness()
-    
-    system_stats = get_system_stats()
-    
     uptime_seconds = (datetime.datetime.now() - bot_start_time).total_seconds() if bot_start_time else 0
     uptime_minutes = round(uptime_seconds / 60, 2)
     
@@ -208,17 +246,6 @@ def health_check():
     )
     
     status_code = 200 if is_healthy else 503
-    
-    # Get rate limiting status
-    try:
-        from rate_limiter import discord_rate_limiter
-        rate_limit_status = discord_rate_limiter.get_rate_limit_status()
-    except Exception as e:
-        rate_limit_status = {"error": f"Failed to get rate limit status: {str(e)}"}
-    
-    # Get Git commit status
-    git_manager = get_git_manager()
-    git_commit_status = git_manager.get_commit_status() if git_manager else {"git_available": False}
     
     health_data = {
         "status": "healthy" if is_healthy else "unhealthy",
@@ -412,7 +439,7 @@ def view_app_logs():
             mimetype='text/plain'
         )
 
-@app.route('/force-commit')
+@app.route('/force-commit', methods=['POST'])
 def force_commit():
     """Endpoint to force immediate commit of all changes to repository"""
     git_manager = get_git_manager()
@@ -451,7 +478,7 @@ def root():
         "health_endpoint": "/health",
         "logs_endpoint": "/logs",
         "app_logs_endpoint": "/app-logs",
-        "force_commit_endpoint": "/force-commit",
+        "git-status_endpoint": "/git-status",
         "channels": len(Channels),
         "status": health_status.get("status", "unknown")
     })
@@ -568,4 +595,5 @@ if __name__ == "__main__":
                 except subprocess.TimeoutExpired:
                     process.kill()
         
+
         print("All bots have been stopped.")
