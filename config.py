@@ -11,3 +11,7 @@ EMBED_COLOR = int(_embed_color_env, 16) if _embed_color_env else int(f"0x{random
 ERROR_PLACEHOLDER = f"Unable to parse this message. Try heading to the message link leading to preview page or Telegram." # Placeholder for unparseable messages 
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL") # Replace this with your Discord webhook, webhookID and webhookToken are 19 and 68 characters long respectively.
 THREAD_ID = os.getenv("DISCORD_THREAD_ID") if os.getenv("DISCORD_THREAD_ID") else None
+
+# Git Configuration for log persistence
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+LOG_COMMIT_INTERVAL = int(os.getenv("LOG_COMMIT_INTERVAL", "2700"))  # Default 45 minutes
