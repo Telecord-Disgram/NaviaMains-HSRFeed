@@ -3,87 +3,7 @@
 A Python-based tool to forward messages from public Telegram channels to Discord using webhooks embeds. Disgram scrapes Telegram's public preview pages and forwards messages, including text, images, and formatted content, to Discord channels through webhooks.
 
 ## Workflow
-```mermaid
-flowchart TD
-    A[Start: python main.py] --> B[Load config.py]
-    B --> C[Initialize Logging]
-    C --> D{Thread ID Exists?}
-    D --> |Yes| E[Launch threadhook.py]
-    D --> |No| F[Launch webhook.py]
-    
-    %% threadhook.py workflow
-    E --> G1[URL: webhook?thread_ID]
-    G1 --> H1[Read Log for Last Message]
-    H1 --> I1[Start Main Loop]
-
-    %% webhook.py workflow
-    F --> G2[URL: webhook]
-    G2 --> H2[Read Log for Last Message]
-    H2 --> I2[Start Main Loop]
-    
-    %% Common workflow for both scripts
-    I1 --> J[Scrape Telegram Prev Page]
-    I2 --> J
-    J --> K{New Message Found?}
-    K --> |No| L[Wait and Retry]
-    L --> J
-    K --> |Yes| M[Parse and Extract Content]
-    M --> N[Text Content]
-    M --> O[Media Content] 
-    M --> P[Grouped Media]
-    N --> Q[Format Text for Discord]
-    O --> Q
-    P --> Q
-    Q --> R[Create Discord Embed]
-    R --> S[Add Source Credits]
-    S --> T[Send Message]
-    T --> |threadhook.py| U[Send to Thread]
-    T --> |webhook.py| V[Send to Channel]
-    U --> W{Send Successful?}
-    V --> W
-    W --> |No| X[Error & Retry Logic]
-    X --> Y[Log Error to Disgram.log]
-    Y --> Z{Retry Available?}
-    Z --> |Yes| AA[Wait and Retry]
-    AA --> T
-    Z --> |No| AB[Skip Message]
-    W --> |Yes| AC[Update Disgram.log]
-    AC --> AD[Continue to Next Message]
-    AB --> AD
-    AD --> AE[Wait for Cooldown]
-    AE --> J
-
-    %% Error Logging
-    AF[Error Logging] -.-> Y
-    AF -.-> AC
-    AF -.-> AD
-
-    %% Rate Limit Handling
-    AG[Rate Limit Handling] -.-> U
-    AG -.-> J
-    AG -.-> V
-
-    %% Shutdown
-    AH[Shutdown: Ctrl + C] --> AI[Terminate All Processes]
-    AI --> AJ[Wait for Termination]
-    AJ --> AK[Exit Program]
-
-    classDef startEnd fill:#2E8B57,stroke:#000,stroke-width:3px,color:#fff
-    classDef process fill:#4169E1,stroke:#000,stroke-width:2px,color:#fff
-    classDef decision fill:#FF6B35,stroke:#000,stroke-width:3px,color:#fff
-    classDef error fill:#DC143C,stroke:#000,stroke-width:3px,color:#fff
-    classDef support fill:#FFD700,stroke:#000,stroke-width:2px,color:#000
-    classDef thread fill:#9370DB,stroke:#000,stroke-width:2px,color:#fff
-    classDef channel fill:#20B2AA,stroke:#000,stroke-width:2px,color:#fff
-    
-    class A,AK startEnd
-    class B,C,G1,G2,H1,H2,I1,I2,J,L,M,N,O,P,Q,R,S,T,AC,AD,AE process
-    class D,K,W,Z decision
-    class X,Y,AA,AB,AI,AJ error
-    class AF,AG,AH support
-    class E,U thread
-    class F,V channel
-```
+The app starts a small Flask service (health and logs endpoints) and spawns one worker process per configured Telegram channel. Each worker scrapes Telegram preview pages and forwards content to Discord via webhooks. If a Discord thread ID is configured, messages go to that thread; otherwise they go to the channel via the webhook. A background monitor restarts crashed workers and recovers from stale states.
 
 ## Features
 
@@ -142,12 +62,36 @@ flowchart TD
 
 ## Usage
 
-1. Start the bot:
-    ```
-    python main.py
-    ```
-2. The bot will create separate processes for each channel and begin forwarding messages.
-3. To stop the bot, press `Ctrl + C`.
+Local development (Flask development server):
+
+```
+python main.py
+```
+
+Production (Gunicorn):
+
+```
+bash start.sh
+```
+
+Alternatively:
+
+```
+gunicorn -w 1 -b 0.0.0.0:8000 main:app
+```
+
+Notes:
+- Use a single Gunicorn worker to avoid duplicating the Telegram scraping subprocesses.
+- The service binds to the `PORT` environment variable if provided, otherwise `8000`.
+
+Windows (PowerShell) notes:
+- Use the local development flow with PowerShell:
+
+```
+python .\main.py
+```
+
+The `start.sh` script is intended for general Linux environments and containers.
 
 ## Logging
 
@@ -184,6 +128,37 @@ Access application logs via the `/logs` endpoint:
 - **Method**: GET
 - **Returns**: Recent log entries from `Disgram.log`
 - **Features**: Real-time log viewing for debugging and monitoring
+
+## Log Management
+
+Clear the contents of `Disgram.log` while preserving the latest message links via the `/logs/clear` endpoint:
+- **URL**: `http://localhost:5000/logs/clear` (or your server's address)
+- **Method**: POST
+- **Returns**: JSON response with status, number of preserved channel links, and the latest message URLs
+- **Features**: 
+  - Removes all timestamped log entries
+  - Preserves the header line
+  - Extracts and preserves the **latest** message link for each channel (not the initial starting points)
+  - Useful for managing log file size while maintaining progress
+
+**Example:**
+```bash
+curl -X POST http://localhost:5000/logs/clear
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Disgram.log cleared successfully",
+  "preserved_links": 9,
+  "latest_messages": [
+    "https://t.me/Galaxy_leak/3649",
+    "https://t.me/Seele_WW_Leak/3728",
+    "..."
+  ]
+}
+```
 
 ## Notes
 
