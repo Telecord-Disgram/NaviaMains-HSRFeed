@@ -68,38 +68,58 @@ def getLink(tg_box):
         return msg_link[0]['href']
     return None
 
+def _render_children(element, in_quote=False):
+    parts = []
+    for child in element.children:
+        parts.append(_render_node(child, in_quote))
+    return ''.join(parts)
+
+
+def _render_node(node, in_quote=False):
+    if getattr(node, 'name', None) is None:
+        return str(node)
+
+    name = node.name
+    if name == 'a':
+        text = _render_children(node, in_quote)
+        href = node.get('href', '')
+        if text == href:
+            return href
+        return f"[{text}]({href})" if href else text
+    if name == 'pre':
+        content = node.get_text()
+        return f"```{content}```"
+    if name in ('b', 'strong'):
+        return f"**{_render_children(node, in_quote)}**"
+    if name == 'tg-spoiler':
+        return f"||{_render_children(node, in_quote)}||"
+    if name in ('i', 'em'):
+        return f"*{_render_children(node, in_quote)}*"
+    if name == 'u':
+        return f"__{_render_children(node, in_quote)}__"
+    if name in ('s', 'strike', 'del'):
+        return f"~~{_render_children(node, in_quote)}~~"
+    if name == 'br':
+        return '\n'
+    if name == 'blockquote':
+        if in_quote:
+            return _render_children(node, in_quote=True)
+        inner = _render_children(node, in_quote=True)
+        inner = inner.replace('\r\n', '\n').replace('\r', '\n')
+        lines = inner.split('\n')
+        quoted = "\n".join(["> " + l if l != "" else "> " for l in lines]) + "\n"
+        return quoted
+
+    return _render_children(node, in_quote)
+
+
 def getText(tg_box):
     msg_text = tg_box.find_all('div', {'class': 'tgme_widget_message_text js-message_text'})
-    converted_text = ''
     if not msg_text:
         return None
 
-    msg_text = msg_text[0]
-    for child in msg_text.children:
-        if child.name is None:
-            converted_text += child
-        elif child.name == 'a':
-            if child.text == child['href']:
-                converted_text += child['href']
-            else:
-                converted_text += f"[{child.text}]({child['href']})"
-        elif child.name == 'pre':
-            converted_text += f"```{child.text}```"
-        elif child.name == 'b':
-            converted_text += f"**{child.text}**"
-        elif child.name == 'tg-spoiler':
-            converted_text += f"||{child.text}||"
-        elif child.name == 'i':
-            converted_text += f"*{child.text}*"
-        elif child.name == 'u':
-            converted_text += f"__{child.text}__"
-        elif child.name == 's':
-            converted_text += f"~~{child.text}~~"
-        elif child.name == 'br':
-            converted_text += '\n'
-        elif child.name == 'blockquote':
-            converted_text += f"> {child.text}\n"
-    return converted_text
+    root = msg_text[0]
+    return _render_children(root)
 
 def getTextFromIndividualMessage(msg_link):
     """Extract text from an individual message URL, useful for grouped media messages"""
