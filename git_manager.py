@@ -132,6 +132,9 @@ class GitLogManager:
             subprocess.run(["git", "config", "user.email", "disgram@bot.local"], 
                           cwd=".", capture_output=True, text=True, check=True)
             
+            subprocess.run(["git", "config", "pull.rebase", "false"], 
+                          cwd=".", capture_output=True, text=True, check=True)
+            
             subprocess.run([
                 "git", "config", "credential.helper", 
                 f"!f() {{ echo \"username={self.github_token}\"; echo \"password=\"; }}; f"
