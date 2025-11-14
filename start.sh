@@ -23,11 +23,7 @@ if ! command -v git &> /dev/null; then
     fi
 fi
 
-# Install GitPython if needed
-echo "Installing GitPython..."
-pip install GitPython>=3.1.40
-
-# Verify and configure Git if available
+    # Verify and configure Git if available
 if command -v git &> /dev/null; then
     echo "Git available: $(git --version)"
     
@@ -36,8 +32,7 @@ if command -v git &> /dev/null; then
     git config --global user.name "Disgram Bot" 2>/dev/null || true
     git config --global user.email "disgram@bot.local" 2>/dev/null || true
     git config --global init.defaultBranch "$DEFAULT_BRANCH" 2>/dev/null || true
-    
-    # Configure token-based authentication if token is available
+    git config --global pull.rebase false 2>/dev/null || true    # Configure token-based authentication if token is available
     if [ ! -z "$GITHUB_TOKEN" ]; then
         echo "Configuring Git authentication with GitHub token..."
         git config --global credential.helper "!f() { echo \"username=\$GITHUB_TOKEN\"; echo \"password=\"; }; f" 2>/dev/null || true
@@ -61,9 +56,6 @@ if command -v git &> /dev/null; then
             # Try to fetch and sync with remote repository
             DEPLOY_BRANCH=${GITHUB_DEPLOY_BRANCH:-azure-prod}
             echo "Attempting to sync with remote ${DEPLOY_BRANCH} branch..."
-            
-            # Configure git pull strategy to avoid warnings
-            git config pull.rebase false 2>/dev/null || true
             
             # Try to fetch the remote branch
             if git fetch origin "$DEPLOY_BRANCH" 2>/dev/null; then
@@ -104,6 +96,22 @@ if command -v git &> /dev/null; then
         echo "Git repository initialized successfully"
     else
         echo "Git repository already exists"
+        
+        # Ensure we're on the correct branch (not detached HEAD)
+        DEPLOY_BRANCH=${GITHUB_DEPLOY_BRANCH:-azure-prod}
+        CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "")
+        
+        if [ -z "$CURRENT_BRANCH" ]; then
+            echo "Detached HEAD detected, checking out branch $DEPLOY_BRANCH..."
+            git checkout -B "$DEPLOY_BRANCH" 2>/dev/null || true
+            git branch --set-upstream-to="origin/$DEPLOY_BRANCH" "$DEPLOY_BRANCH" 2>/dev/null || true
+        elif [ "$CURRENT_BRANCH" != "$DEPLOY_BRANCH" ]; then
+            echo "Switching from $CURRENT_BRANCH to $DEPLOY_BRANCH..."
+            git checkout "$DEPLOY_BRANCH" 2>/dev/null || git checkout -B "$DEPLOY_BRANCH" 2>/dev/null || true
+            git branch --set-upstream-to="origin/$DEPLOY_BRANCH" "$DEPLOY_BRANCH" 2>/dev/null || true
+        else
+            echo "Already on branch $DEPLOY_BRANCH"
+        fi
     fi
 else
     echo "Warning: Git not available - Git commit functionality will be disabled"

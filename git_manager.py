@@ -132,9 +132,6 @@ class GitLogManager:
             subprocess.run(["git", "config", "user.email", "disgram@bot.local"], 
                           cwd=".", capture_output=True, text=True, check=True)
             
-            subprocess.run(["git", "config", "pull.rebase", "false"], 
-                          cwd=".", capture_output=True, text=True, check=True)
-            
             subprocess.run([
                 "git", "config", "credential.helper", 
                 f"!f() {{ echo \"username={self.github_token}\"; echo \"password=\"; }}; f"
@@ -231,6 +228,11 @@ class GitLogManager:
                 
             current_branch = branch_result.stdout.strip()
             
+            # Fallback to environment variable if branch is empty (detached HEAD state)
+            if not current_branch:
+                current_branch = os.getenv("GITHUB_DEPLOY_BRANCH", "azure-prod")
+                logger.warning(f"Detached HEAD detected, using branch from env: {current_branch}")
+            
             fetch_result = subprocess.run(["git", "fetch", "origin", current_branch], 
                                         cwd=".", capture_output=True, text=True)
             if fetch_result.returncode != 0:
@@ -272,6 +274,11 @@ class GitLogManager:
                 return False
                 
             current_branch = branch_result.stdout.strip()
+            
+            # Fallback to environment variable if branch is empty (detached HEAD state)
+            if not current_branch:
+                current_branch = os.getenv("GITHUB_DEPLOY_BRANCH", "azure-prod")
+                logger.warning(f"Detached HEAD detected, using branch from env: {current_branch}")
             
             result = subprocess.run(["git", "push", "origin", current_branch], 
                                    cwd=".", capture_output=True, text=True)
