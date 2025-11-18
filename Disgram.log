@@ -2260,3 +2260,8 @@ https://t.me/hakush_in/789
 2025-11-18 21:55:52 Bot working for hakush_in. Time passed: 0:25:12.103650
 2025-11-18 22:00:52 Bot working for Galaxy_leak. Time passed: 0:30:12.102407
 2025-11-18 22:00:53 Bot working for hakush_in. Time passed: 0:30:13.210134
+2025-11-18 22:03:57 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-11-18 22:03:57 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-11-18 22:04:03 Bot working for hakush_in. Time passed: 0:00:16.704480
+2025-11-18 22:04:10 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-11-18 22:04:22 Bot working for Galaxy_leak. Time passed: 0:00:35.502644
