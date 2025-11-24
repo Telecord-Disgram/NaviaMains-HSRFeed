@@ -590,3 +590,6 @@ https://t.me/Galaxy_leak/3832
 2025-11-24 01:53:46 Bot working for hakush_in. Time passed: 0:46:03.609145
 2025-11-24 01:57:59 Bot working for Galaxy_leak. Time passed: 0:50:17.391170
 2025-11-24 01:58:47 Bot working for hakush_in. Time passed: 0:51:04.999859
+2025-11-24 02:01:21 Bot working for Galaxy_leak. Time passed: 0:00:01.610133
+2025-11-24 02:01:31 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-11-24 02:01:35 Bot working for hakush_in. Time passed: 0:00:15.806085
