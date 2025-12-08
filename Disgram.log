@@ -2103,3 +2103,44 @@ https://t.me/Galaxy_leak/3832
 2025-12-08 05:55:11 Bot working for Galaxy_leak. Time passed: 1:50:39.803355
 2025-12-08 06:00:06 Bot working for hakush_in. Time passed: 1:55:33.816866
 2025-12-08 06:00:13 Bot working for Galaxy_leak. Time passed: 1:55:41.719911
+2025-12-08 06:55:35 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-12-08 06:55:41 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-12-08 06:55:44 Bot working for hakush_in. Time passed: 0:00:20.613188
+2025-12-08 06:55:53 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/Galaxy_leak (Caused by NewConnectionError("HTTPSConnection(host='t.me', port=443): Failed to establish a new connection: [Errno 101] Network is unreachable"))
+2025-12-08 06:55:59 New message found: https://t.me/Galaxy_leak/3871
+2025-12-08 06:55:59 Sending message to Discord: https://t.me/Galaxy_leak/3871
+2025-12-08 06:56:00 Message sent successfully.
+2025-12-08 06:56:00 New message found: https://t.me/Galaxy_leak/3872
+2025-12-08 06:56:00 Sending message to Discord: https://t.me/Galaxy_leak/3872
+2025-12-08 06:56:01 Message sent successfully.
+2025-12-08 06:56:01 New message found: https://t.me/Galaxy_leak/3873
+2025-12-08 06:56:01 Sending message to Discord: https://t.me/Galaxy_leak/3873
+2025-12-08 06:56:02 Message sent successfully.
+2025-12-08 06:56:02 New message found: https://t.me/Galaxy_leak/3874
+2025-12-08 06:56:02 Sending message to Discord: https://t.me/Galaxy_leak/3874
+2025-12-08 06:56:02 Message sent successfully.
+2025-12-08 06:56:02 Bot working for Galaxy_leak. Time passed: 0:00:38.896402
+2025-12-08 07:00:45 Bot working for hakush_in. Time passed: 0:05:22.004374
+2025-12-08 07:01:04 Bot working for Galaxy_leak. Time passed: 0:05:40.645625
+2025-12-08 07:05:47 Bot working for hakush_in. Time passed: 0:10:23.315034
+2025-12-08 07:06:05 Bot working for Galaxy_leak. Time passed: 0:10:41.935113
+2025-12-08 07:10:48 Bot working for hakush_in. Time passed: 0:15:25.004163
+2025-12-08 07:11:06 Bot working for Galaxy_leak. Time passed: 0:15:42.944303
+2025-12-08 07:15:50 Bot working for hakush_in. Time passed: 0:20:26.513667
+2025-12-08 07:16:08 Bot working for Galaxy_leak. Time passed: 0:20:45.031543
+2025-12-08 07:20:51 Bot working for hakush_in. Time passed: 0:25:27.607704
+2025-12-08 07:21:10 Bot working for Galaxy_leak. Time passed: 0:25:46.442554
+2025-12-08 07:25:52 Bot working for hakush_in. Time passed: 0:30:28.812770
+2025-12-08 07:26:11 Bot working for Galaxy_leak. Time passed: 0:30:47.534915
+2025-12-08 07:30:53 Bot working for hakush_in. Time passed: 0:35:29.913663
+2025-12-08 07:31:12 Bot working for Galaxy_leak. Time passed: 0:35:48.944104
+2025-12-08 07:35:55 Bot working for hakush_in. Time passed: 0:40:31.403584
+2025-12-08 07:36:14 Bot working for Galaxy_leak. Time passed: 0:40:50.534364
+2025-12-08 07:40:56 Bot working for hakush_in. Time passed: 0:45:32.805704
+2025-12-08 07:41:15 Bot working for Galaxy_leak. Time passed: 0:45:52.133157
+2025-12-08 07:45:58 Bot working for hakush_in. Time passed: 0:50:34.999876
+2025-12-08 07:46:16 Bot working for Galaxy_leak. Time passed: 0:50:53.233832
+2025-12-08 07:51:00 Bot working for hakush_in. Time passed: 0:55:36.310904
+2025-12-08 07:51:18 Bot working for Galaxy_leak. Time passed: 0:55:55.136189
+2025-12-08 07:56:01 Bot working for hakush_in. Time passed: 1:00:37.509763
+2025-12-08 07:56:19 Bot working for Galaxy_leak. Time passed: 1:00:56.244308
