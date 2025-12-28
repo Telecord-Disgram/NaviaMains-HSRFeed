@@ -79,3 +79,46 @@ https://t.me/Galaxy_leak/3832
 2025-12-28 09:53:03 Bot working for Galaxy_leak. Time passed: 0:10:04.895440
 2025-12-28 09:58:03 Bot working for hakush_in. Time passed: 0:15:05.099278
 2025-12-28 09:58:04 Bot working for Galaxy_leak. Time passed: 0:15:06.205254
+2025-12-28 11:11:29 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-12-28 11:11:32 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-12-28 11:11:44 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/hakush_in (Caused by NewConnectionError("HTTPSConnection(host='t.me', port=443): Failed to establish a new connection: [Errno 101] Network is unreachable"))
+2025-12-28 11:11:45 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-12-28 11:11:59 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/Galaxy_leak (Caused by NewConnectionError("HTTPSConnection(host='t.me', port=443): Failed to establish a new connection: [Errno 101] Network is unreachable"))
+2025-12-28 11:12:06 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-12-28 11:12:24 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-12-28 11:12:28 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-12-28 11:12:50 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/hakush_in (Caused by NewConnectionError("HTTPSConnection(host='t.me', port=443): Failed to establish a new connection: [Errno 101] Network is unreachable"))
+2025-12-28 11:12:50 Max retries reached. Skipping this iteration.
+2025-12-28 11:12:54 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/Galaxy_leak (Caused by NewConnectionError("HTTPSConnection(host='t.me', port=443): Failed to establish a new connection: [Errno 101] Network is unreachable"))
+2025-12-28 11:12:54 Max retries reached. Skipping this iteration.
+2025-12-28 11:13:02 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-12-28 11:13:12 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-12-28 11:13:15 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-12-28 11:13:29 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-12-28 11:13:29 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/hakush_in (Caused by NewConnectionError("HTTPSConnection(host='t.me', port=443): Failed to establish a new connection: [Errno 101] Network is unreachable"))
+2025-12-28 11:13:43 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/Galaxy_leak (Caused by NewConnectionError("HTTPSConnection(host='t.me', port=443): Failed to establish a new connection: [Errno 101] Network is unreachable"))
+2025-12-28 11:13:48 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-12-28 11:14:01 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/Galaxy_leak (Caused by NewConnectionError("HTTPSConnection(host='t.me', port=443): Failed to establish a new connection: [Errno 101] Network is unreachable"))
+2025-12-28 11:14:14 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Read timed out. (read timeout=10)
+2025-12-28 11:14:14 Max retries reached. Skipping this iteration.
+2025-12-28 11:14:24 Error scraping Telegram: HTTPSConnectionPool(host='t.me', port=443): Max retries exceeded with url: /s/hakush_in (Caused by NewConnectionError("HTTPSConnection(host='t.me', port=443): Failed to establish a new connection: [Errno 101] Network is unreachable"))
+2025-12-28 11:14:30 Bot working for Galaxy_leak. Time passed: 0:03:11.515580
+2025-12-28 11:14:32 Bot working for hakush_in. Time passed: 0:03:13.207325
+2025-12-28 11:19:31 Bot working for Galaxy_leak. Time passed: 0:08:12.612578
+2025-12-28 11:19:33 Bot working for hakush_in. Time passed: 0:08:14.005589
+2025-12-28 11:24:32 Bot working for Galaxy_leak. Time passed: 0:13:13.712606
+2025-12-28 11:24:34 Bot working for hakush_in. Time passed: 0:13:15.296671
+2025-12-28 11:29:34 Bot working for Galaxy_leak. Time passed: 0:18:15.101784
+2025-12-28 11:29:35 Bot working for hakush_in. Time passed: 0:18:16.704100
+2025-12-28 11:34:35 Bot working for Galaxy_leak. Time passed: 0:23:16.307348
+2025-12-28 11:34:36 Bot working for hakush_in. Time passed: 0:23:17.507080
+2025-12-28 11:39:36 Bot working for Galaxy_leak. Time passed: 0:28:17.406879
+2025-12-28 11:39:37 Bot working for hakush_in. Time passed: 0:28:18.406332
+2025-12-28 11:44:37 Bot working for Galaxy_leak. Time passed: 0:33:18.501467
+2025-12-28 11:44:38 Bot working for hakush_in. Time passed: 0:33:19.303840
+2025-12-28 11:49:38 Bot working for Galaxy_leak. Time passed: 0:38:19.604788
+2025-12-28 11:49:39 Bot working for hakush_in. Time passed: 0:38:20.698687
+2025-12-28 11:54:40 Bot working for Galaxy_leak. Time passed: 0:43:21.098969
+2025-12-28 11:54:41 Bot working for hakush_in. Time passed: 0:43:22.006625
+2025-12-28 11:59:41 Bot working for Galaxy_leak. Time passed: 0:48:22.206746
+2025-12-28 11:59:42 Bot working for hakush_in. Time passed: 0:48:23.101595
