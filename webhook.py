@@ -410,7 +410,13 @@ def sendMessage(msg_link: str, msg_text: str | None, msg_image: str | None, msg_
             fallback_gallery_items = []
             
             for item in media_status:
-                if item['attached'] and not item['is_video']:
+                if item['attached']:
+                    if item['is_video']:
+                        video_size = len(item['data'].getvalue())
+                        if video_size > 10 * 1024 * 1024:
+                            log_message(f"Video {item['filename']} is too large ({video_size / (1024*1024):.2f} MB), replacing with CDN URL.", log_type="new_message")
+                            fallback_gallery_items.append(discord.MediaGalleryItem(item['url']))
+                            continue
                     fallback_files.append(File(item['data'], filename=item['filename']))
                     fallback_gallery_items.append(discord.MediaGalleryItem(f"attachment://{item['filename']}"))
                 else:
