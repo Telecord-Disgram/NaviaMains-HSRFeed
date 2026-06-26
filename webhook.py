@@ -13,6 +13,9 @@ from discord.ui import LayoutView, Container, TextDisplay, MediaGallery
 import concurrent.futures
 from config import WEBHOOK_URL, THREAD_ID, COOLDOWN, EMBED_COLOR, ERROR_PLACEHOLDER
 
+TELEGRAM_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; Disgram/2.0)"}
+MAX_MEDIA_WORKERS = 8
+
 def log_message(message: str, log_type: str = "info") -> None:
     """Log messages to console and to Disgram.log for specific message types."""
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -41,7 +44,7 @@ def scrapeTelegramMessageBox(channel: str) -> list:
     for attempt in range(max_retries):
         try:
             log_message(f"Scraping messages from Telegram channel: {channel} (Attempt {attempt + 1})")
-            tg_html = requests.get(f'https://t.me/s/{channel}', timeout=10)
+            tg_html = requests.get(f'https://t.me/s/{channel}', headers=TELEGRAM_HEADERS, timeout=10)
             tg_html.raise_for_status()
             tg_soup = BeautifulSoup(tg_html.text, 'html.parser')
             return tg_soup.find_all('div', {'class': 'tgme_widget_message_wrap js-widget_message_wrap'})
@@ -136,7 +139,7 @@ def getTextFromIndividualMessage(msg_link: str) -> str | None:
     
     for attempt in range(max_retries):
         try:
-            response = requests.get(msg_link, timeout=10)
+            response = requests.get(msg_link, headers=TELEGRAM_HEADERS, timeout=10)
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'html.parser')
             
@@ -245,7 +248,7 @@ def download_file(url: str | None, prefix: str, ext_fallback: str, timeout: int 
     retry_delay = 2
     for attempt in range(max_retries):
         try:
-            response = requests.get(url, timeout=timeout)
+            response = requests.get(url, headers=TELEGRAM_HEADERS, timeout=timeout)
             response.raise_for_status()
             
             content_bytes = response.content
@@ -309,7 +312,7 @@ def download_media_concurrently(media_list: list[tuple[str, str]]) -> list[tuple
             log_message(f"Concurrent download error for {url}: {e}", log_type="error")
             return url, None, None
             
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(media_list) or 1) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(media_list), MAX_MEDIA_WORKERS) or 1) as executor:
         results = list(executor.map(download_one, media_list))
     return results
 
