@@ -127,10 +127,6 @@ class GitLogManager:
     def _configure_git_auth(self):
         """Configure git authentication using GitHub token"""
         try:
-            subprocess.run(["git", "config", "user.name", "Disgram Bot"], 
-                          cwd=".", capture_output=True, text=True, check=True)
-            subprocess.run(["git", "config", "user.email", "disgram@bot.local"], 
-                          cwd=".", capture_output=True, text=True, check=True)
             
             subprocess.run([
                 "git", "config", "credential.helper", 
@@ -370,8 +366,13 @@ class GitLogManager:
             else:
                 commit_message = f"Auto-commit: Update log files ({', '.join(changed_log_files)}) - {timestamp}"
             
+            env = os.environ.copy()
+            env['GIT_AUTHOR_NAME'] = 'Disgram Bot'
+            env['GIT_AUTHOR_EMAIL'] = 'disgram@bot.local'
+            env['GIT_COMMITTER_NAME'] = 'Disgram Bot'
+            env['GIT_COMMITTER_EMAIL'] = 'disgram@bot.local'
             subprocess.run(["git", "commit", "-m", commit_message], 
-                          cwd=".", capture_output=True, text=True, check=True)
+                          cwd=".", env=env, capture_output=True, text=True, check=True)
             
             if self.github_token:
                 push_success = self._push_changes()
