@@ -344,7 +344,7 @@ def sendMessage(msg_link: str, msg_text: str | None, msg_image: str | None, msg_
             
         success, too_large = send_webhook_message(WEBHOOK_URL, THREAD_ID, **kwargs)
         if not success:
-            if too_large and (image_data or video_data):
+            if too_large:
                 log_message("Payload too large, falling back to sending raw links without attachments...", log_type="new_message")
                 content_parts = []
                 if msg_text:
@@ -421,9 +421,20 @@ def sendGroupedMediaMessage(msg_link: str, msg_text: str | None, images: list[st
             
         success, too_large = send_webhook_message(WEBHOOK_URL, THREAD_ID, **kwargs)
         if not success:
-            if too_large and main_files:
-                log_message("Grouped media main message too large, falling back to link...", log_type="new_message")
-                main_content = f"**Grouped Media Main Message**:\n{images[0] if images else (videos[0] if videos else '')}\n[Message Link](<{msg_link}>)"
+            if too_large:
+                log_message("Grouped media main message too large, falling back to sending raw links without attachments...", log_type="new_message")
+                content_parts = []
+                if msg_text:
+                    content_parts.append(msg_text)
+                
+                # Add first media link
+                media_link = images[0] if images else (videos[0] if videos else '')
+                if media_link:
+                    content_parts.append(media_link)
+                
+                content_parts.append(f"[Message Link](<{msg_link}>)")
+                main_content = "\n\n".join(content_parts)
+                
                 send_webhook_message(
                     WEBHOOK_URL,
                     THREAD_ID,
