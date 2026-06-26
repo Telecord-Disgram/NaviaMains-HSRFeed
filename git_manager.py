@@ -31,6 +31,8 @@ class GitLogManager:
         self.github_token = github_token
         self.github_app_token = None
         self.github_app_token_expires_at = 0.0
+        self.github_app_commit_name = None
+        self.github_app_commit_email = None
         self.commit_interval = commit_interval
         self.local_log_path = "Disgram.log"
         self.commit_lock = threading.Lock()
@@ -196,6 +198,7 @@ class GitLogManager:
                         self.github_app_token_expires_at = current_time + 3600
                         
                     logger.info("Successfully generated new GitHub App installation token")
+                    self._fetch_app_bot_identity(jwt_token)
                     return self.github_app_token
                 else:
                     logger.error("Token or expiration missing in GitHub API response")
@@ -206,6 +209,42 @@ class GitLogManager:
             logger.error(f"Unexpected error generating GitHub App token: {e}")
             
         return None
+
+    def _fetch_app_bot_identity(self, jwt_token: str):
+        """Fetch GitHub App metadata to construct proper bot commit identity"""
+        if self.github_app_commit_name:
+            return
+        try:
+            headers = {
+                "Authorization": f"Bearer {jwt_token}",
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "Disgram-Bot"
+            }
+            app_resp = requests.get("https://api.github.com/app", headers=headers, timeout=10)
+            if app_resp.status_code != 200:
+                logger.warning(f"Could not fetch GitHub App info: {app_resp.status_code}")
+                return
+            app_data = app_resp.json()
+            app_slug = app_data.get("slug", "")
+            if not app_slug:
+                logger.warning("GitHub App slug not found in API response")
+                return
+
+            bot_username = f"{app_slug}[bot]"
+            user_resp = requests.get(
+                f"https://api.github.com/users/{bot_username}",
+                headers={"Accept": "application/vnd.github+json", "User-Agent": "Disgram-Bot"},
+                timeout=10
+            )
+            if user_resp.status_code == 200:
+                bot_user_id = user_resp.json().get("id")
+                self.github_app_commit_name = bot_username
+                self.github_app_commit_email = f"{bot_user_id}+{bot_username}@users.noreply.github.com"
+                logger.info(f"GitHub App bot identity resolved: {self.github_app_commit_name} <{self.github_app_commit_email}>")
+            else:
+                logger.warning(f"Could not resolve bot user '{bot_username}': {user_resp.status_code}")
+        except Exception as e:
+            logger.warning(f"Error fetching GitHub App bot identity: {e}")
 
     def _get_git_token(self) -> Optional[str]:
         """Get git token, dynamically generating GitHub App token if configured"""
@@ -475,10 +514,12 @@ class GitLogManager:
                 commit_message = f"Auto-commit: Update log files ({', '.join(changed_log_files)}) - {timestamp}"
             
             env = os.environ.copy()
-            env['GIT_AUTHOR_NAME'] = 'Disgram Bot'
-            env['GIT_AUTHOR_EMAIL'] = 'disgram@bot.local'
-            env['GIT_COMMITTER_NAME'] = 'Disgram Bot'
-            env['GIT_COMMITTER_EMAIL'] = 'disgram@bot.local'
+            commit_name = self.github_app_commit_name or 'Disgram Bot'
+            commit_email = self.github_app_commit_email or 'disgram@bot.local'
+            env['GIT_AUTHOR_NAME'] = commit_name
+            env['GIT_AUTHOR_EMAIL'] = commit_email
+            env['GIT_COMMITTER_NAME'] = commit_name
+            env['GIT_COMMITTER_EMAIL'] = commit_email
             subprocess.run(["git", "commit", "-m", commit_message], 
                           cwd=".", env=env, capture_output=True, text=True, check=True)
             
