@@ -9,6 +9,8 @@ from dateutil import parser
 from bs4 import BeautifulSoup
 import discord
 from discord import SyncWebhook, Embed, File
+from discord.ui import LayoutView, Container, TextDisplay, MediaGallery
+import concurrent.futures
 from config import WEBHOOK_URL, THREAD_ID, COOLDOWN, EMBED_COLOR, ERROR_PLACEHOLDER
 
 def log_message(message: str, log_type: str = "info") -> None:
@@ -291,243 +293,170 @@ def send_webhook_message(webhook_url: str, thread_id: str | None = None, **kwarg
     except Exception as e:
         log_message(f"Error sending message to Discord: {e}", log_type="error")
         return False, False
+def download_media_concurrently(media_list: list[tuple[str, str]]) -> list[tuple[str, io.BytesIO | None, str | None]]:
+    """Download multiple media files concurrently while preserving their original order.
+    media_list is a list of (media_type, url) tuples.
+    Returns a list of (url, bytes_io, filename) tuples."""
+    def download_one(item: tuple[str, str]) -> tuple[str, io.BytesIO | None, str | None]:
+        media_type, url = item
+        try:
+            if media_type == 'image':
+                data, filename = download_image(url)
+            else:
+                data, filename = download_video(url)
+            return url, data, filename
+        except Exception as e:
+            log_message(f"Concurrent download error for {url}: {e}", log_type="error")
+            return url, None, None
+            
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(media_list) or 1) as executor:
+        results = list(executor.map(download_one, media_list))
+    return results
 
 def sendMessage(msg_link: str, msg_text: str | None, msg_image: str | None, msg_video: str | None, 
                 author_name: str, icon_url: str | None, timestamp: datetime.datetime | None = None, 
                 all_images: list[str] | None = None, all_videos: list[str] | None = None) -> None:
-    """Send a Telegram message to Discord webhook (with thread support)."""
+    """Send a Telegram message to Discord webhook using Components V2 (with thread support)."""
+    # 1. Collect all media in their correct sequence
+    media_list = []
     images_to_send = all_images if all_images else ([msg_image] if msg_image else [])
     videos_to_send = all_videos if all_videos else ([msg_video] if msg_video else [])
     
-    if len(images_to_send) > 1 or len(videos_to_send) > 1:
-        log_message(f"Sending grouped media message with {len(images_to_send)} images and {len(videos_to_send)} videos: {msg_link}", log_type="new_message")
-        sendGroupedMediaMessage(msg_link, msg_text, images_to_send, videos_to_send, author_name, icon_url, timestamp)
-        return
+    for img in images_to_send:
+        if img:
+            media_list.append(('image', img))
+    for vid in videos_to_send:
+        if vid:
+            media_list.append(('video', vid))
+            
+    # Slicing to first 10 items since Discord CV2 gallery limit is 10
+    media_list = media_list[:10]
     
-    image_data, image_filename = None, None
-    if images_to_send:
-        image_data, image_filename = download_image(images_to_send[0])
+    # 2. Download concurrently
+    downloaded_results = []
+    if media_list:
+        log_message(f"Downloading {len(media_list)} media files concurrently...", log_type="status2")
+        downloaded_results = download_media_concurrently(media_list)
         
-    video_data, video_filename = None, None
-    video_sent_as_attachment = False
-    if videos_to_send:
-        try:
-            video_data, video_filename = download_video(videos_to_send[0])
-            if video_data and video_filename:
-                video_sent_as_attachment = True
-                log_message(f"Video will be sent as attachment: {videos_to_send[0]}", log_type="new_message")
-        except Exception as e:
-            log_message(f"Failed to download video, will fallback to link: {e}", log_type="error")
+    # 3. Build files list and gallery items
+    files = []
+    gallery_items = []
+    media_status = []
+    
+    for url, data, filename in downloaded_results:
+        is_video = any(item[0] == 'video' and item[1] == url for item in media_list)
+        if data and filename:
+            files.append(File(data, filename=filename))
+            gallery_items.append(discord.MediaGalleryItem(f"attachment://{filename}"))
+            media_status.append({
+                'url': url,
+                'data': data,
+                'filename': filename,
+                'is_video': is_video,
+                'attached': True
+            })
+        else:
+            gallery_items.append(discord.MediaGalleryItem(url))
+            media_status.append({
+                'url': url,
+                'data': None,
+                'filename': None,
+                'is_video': is_video,
+                'attached': False
+            })
             
     try:
-        embed = Embed(title='Message Link', url=msg_link, color=EMBED_COLOR, timestamp=timestamp)
-        if msg_text:
-            embed.description = msg_text
-        embed.set_author(name=author_name, icon_url=icon_url, url=msg_link)
+        # Format timestamp
+        unix_time = int(timestamp.timestamp()) if timestamp else int(time.time())
+        time_str = f" at <t:{unix_time}:f>"
         
-        files = []
-        if image_data and image_filename:
-            files.append(File(image_data, filename=image_filename))
-            embed.set_image(url=f"attachment://{image_filename}")
-        if video_data and video_filename:
-            files.append(File(video_data, filename=video_filename))
+        text_content = f"{msg_text}\n\n-# [Message Link](<{msg_link}>){time_str}" if msg_text else f"-# [Message Link](<{msg_link}>){time_str}"
+        text_disp = TextDisplay(text_content)
+        
+        # Construct layout container
+        container = Container(text_disp, accent_color=EMBED_COLOR)
+        if gallery_items:
+            gallery = MediaGallery(*gallery_items)
+            container.add_item(gallery)
             
+        view = LayoutView()
+        view.add_item(container)
+        
         log_message(f"Sending message to Discord: {msg_link}", log_type="new_message")
         
         kwargs = {
             'username': author_name,
             'avatar_url': icon_url,
-            'embed': embed
+            'view': view
         }
         if files:
             kwargs['files'] = files
             
         success, too_large = send_webhook_message(WEBHOOK_URL, THREAD_ID, **kwargs)
+        
+        # Targeted video fallback on HTTP 413 (Payload Too Large)
+        if not success and too_large:
+            log_message("Payload too large, applying targeted video fallback (replacing videos with CDN URLs)...", log_type="new_message")
+            
+            # Reset BytesIO streams before retry to prevent empty bytes read
+            for item in media_status:
+                if item['data']:
+                    item['data'].seek(0)
+                    
+            fallback_files = []
+            fallback_gallery_items = []
+            
+            for item in media_status:
+                if item['attached'] and not item['is_video']:
+                    fallback_files.append(File(item['data'], filename=item['filename']))
+                    fallback_gallery_items.append(discord.MediaGalleryItem(f"attachment://{item['filename']}"))
+                else:
+                    fallback_gallery_items.append(discord.MediaGalleryItem(item['url']))
+                    
+            fallback_container = Container(text_disp, accent_color=EMBED_COLOR)
+            if fallback_gallery_items:
+                fallback_gallery = MediaGallery(*fallback_gallery_items)
+                fallback_container.add_item(fallback_gallery)
+                
+            fallback_view = LayoutView()
+            fallback_view.add_item(fallback_container)
+            
+            fallback_kwargs = {
+                'username': author_name,
+                'avatar_url': icon_url,
+                'view': fallback_view
+            }
+            if fallback_files:
+                fallback_kwargs['files'] = fallback_files
+                
+            success, too_large = send_webhook_message(WEBHOOK_URL, THREAD_ID, **fallback_kwargs)
+            
+        # Final fallback to plain text content if layout still fails
         if not success:
-            if too_large:
-                log_message("Payload too large, falling back to sending raw links without attachments...", log_type="new_message")
-                content_parts = []
-                if msg_text:
-                    content_parts.append(msg_text)
-                
-                # Add raw media links so Discord can auto-embed them
-                if videos_to_send:
-                    content_parts.append(videos_to_send[0])
-                elif images_to_send:
-                    content_parts.append(images_to_send[0])
-                
-                content_parts.append(f"[Message Link](<{msg_link}>)")
-                
-                fallback_content = "\n\n".join(content_parts)
-                
-                fallback_success, _ = send_webhook_message(
-                    WEBHOOK_URL,
-                    THREAD_ID,
-                    username=author_name,
-                    avatar_url=icon_url,
-                    content=fallback_content
-                )
-                if fallback_success:
-                    log_message("Sent plain text fallback successfully.", log_type="new_message")
-                    return
+            log_message("Failed to send with layout, falling back to plain text content only...", log_type="new_message")
+            content_parts = []
+            if msg_text:
+                content_parts.append(msg_text)
+            for url in [item['url'] for item in media_status]:
+                content_parts.append(url)
+            content_parts.append(f"[Message Link](<{msg_link}>) at <t:{unix_time}:f>")
             
-            log_message("Failed to send main message", log_type="error")
-            return
+            fallback_content = "\n\n".join(content_parts)
             
-        if videos_to_send and not video_sent_as_attachment:
-            video_url = videos_to_send[0]
-            log_message(f"Sending raw video link as separate message: {video_url}", log_type="new_message")
-            
-            # Send raw video link so Discord auto-embeds the player
-            send_webhook_message(
-                WEBHOOK_URL, 
+            success, _ = send_webhook_message(
+                WEBHOOK_URL,
                 THREAD_ID,
                 username=author_name,
                 avatar_url=icon_url,
-                content=f"{video_url}\n[Message Link](<{msg_link}>)"
+                content=fallback_content
             )
-            
+            if not success:
+                log_message("Failed to send plain text fallback", log_type="error")
+                return
+                
         log_message("Message sent successfully.", log_type="new_message")
     except Exception as e:
         log_message(f"Error preparing or sending message to Discord: {e}", log_type="error")
-
-def sendGroupedMediaMessage(msg_link: str, msg_text: str | None, images: list[str], videos: list[str], 
-                            author_name: str, icon_url: str | None, timestamp: datetime.datetime | None = None) -> None:
-    """Send multiple images/videos in a grouped message."""
-    try:
-        main_embed = Embed(title='Grouped Media Message Link', url=msg_link, color=EMBED_COLOR, timestamp=timestamp)
-        description_parts = []
-        if msg_text:
-            description_parts.append(msg_text)
-        description_parts.append(f"-# **Grouped Media:** {len(images)} images, {len(videos)} videos")
-        main_embed.description = '\n\n'.join(description_parts)
-        main_embed.set_author(name=author_name, icon_url=icon_url, url=msg_link)
-        
-        main_files = []
-        if images:
-            image_data, image_filename = download_image(images[0])
-            if image_data and image_filename:
-                main_files.append(File(image_data, filename=image_filename))
-                main_embed.set_image(url=f"attachment://{image_filename}")
-                
-        log_message(f"Sending grouped media main message: {msg_link}", log_type="new_message")
-        kwargs = {
-            'username': author_name,
-            'avatar_url': icon_url,
-            'embed': main_embed
-        }
-        if main_files:
-            kwargs['files'] = main_files
-            
-        success, too_large = send_webhook_message(WEBHOOK_URL, THREAD_ID, **kwargs)
-        if not success:
-            if too_large:
-                log_message("Grouped media main message too large, falling back to sending raw links without attachments...", log_type="new_message")
-                content_parts = []
-                if msg_text:
-                    content_parts.append(msg_text)
-                
-                # Add first media link
-                media_link = images[0] if images else (videos[0] if videos else '')
-                if media_link:
-                    content_parts.append(media_link)
-                
-                content_parts.append(f"[Message Link](<{msg_link}>)")
-                main_content = "\n\n".join(content_parts)
-                
-                send_webhook_message(
-                    WEBHOOK_URL,
-                    THREAD_ID,
-                    username=author_name,
-                    avatar_url=icon_url,
-                    content=main_content
-                )
-            else:
-                log_message("Failed to send grouped media main message", log_type="error")
-                return
-            
-        # Send remaining images
-        for i, image_url in enumerate(images[1:], 2):
-            try:
-                image_data, image_filename = download_image(image_url)
-                if image_data and image_filename:
-                    image_embed = Embed(title='Message Link', url=msg_link, color=EMBED_COLOR, timestamp=timestamp)
-                    if msg_text:
-                        image_embed.description = msg_text[:4096]
-                    image_embed.set_author(name=author_name, icon_url=icon_url, url=msg_link)
-                    image_embed.set_footer(text=f'Image {i} of {len(images)}')
-                    image_embed.set_image(url=f"attachment://{image_filename}")
-                    
-                    success, too_large = send_webhook_message(
-                        WEBHOOK_URL,
-                        THREAD_ID,
-                        username=author_name,
-                        avatar_url=icon_url,
-                        embed=image_embed,
-                        files=[File(image_data, filename=image_filename)]
-                    )
-                    if not success:
-                        if too_large:
-                            log_message(f"Image {i} too large, falling back to link...", log_type="new_message")
-                            image_content = f"**Image {i} of {len(images)}**:\n{image_url}\n[Message Link](<{msg_link}>)"
-                            send_webhook_message(
-                                WEBHOOK_URL,
-                                THREAD_ID,
-                                username=author_name,
-                                avatar_url=icon_url,
-                                content=image_content
-                            )
-                        else:
-                            log_message(f"Failed to send image {i}", log_type="error")
-            except Exception as e:
-                log_message(f"Error sending image {i}: {e}", log_type="error")
-                
-        # Send videos
-        for i, video_url in enumerate(videos, 1):
-            try:
-                video_sent_as_attachment = False
-                try:
-                    video_data, video_filename = download_video(video_url)
-                    if video_data and video_filename:
-                        log_message(f"Attempting to send video {i} as attachment: {video_url}", log_type="new_message")
-                        video_embed = Embed(title='Message Link', url=msg_link, color=EMBED_COLOR, timestamp=timestamp)
-                        if msg_text:
-                            video_embed.description = msg_text[:4096]
-                        video_embed.set_author(name=author_name, icon_url=icon_url, url=msg_link)
-                        video_embed.set_footer(text=f'Video {i} of {len(videos)}')
-                        
-                        success, too_large = send_webhook_message(
-                            WEBHOOK_URL,
-                            THREAD_ID,
-                            username=author_name,
-                            avatar_url=icon_url,
-                            embed=video_embed,
-                            files=[File(video_data, filename=video_filename)]
-                        )
-                        if success:
-                            video_sent_as_attachment = True
-                            log_message(f"Video {i} sent successfully as attachment", log_type="new_message")
-                        elif too_large:
-                            log_message(f"Video {i} too large to attach, will fallback to raw link", log_type="new_message")
-                except Exception as e:
-                    log_message(f"Failed to send video {i} as attachment, falling back to link: {e}", log_type="error")
-                    
-                if not video_sent_as_attachment:
-                    # Send raw video link so Discord auto-embeds the player
-                    video_content = f"**Video {i} of {len(videos)}**:\n{video_url}\n[Message Link](<{msg_link}>)"
-                    send_webhook_message(
-                        WEBHOOK_URL,
-                        THREAD_ID,
-                        username=author_name,
-                        avatar_url=icon_url,
-                        content=video_content
-                    )
-            except Exception as e:
-                log_message(f"Error sending video {i}: {e}", log_type="error")
-                
-        log_message(f"Grouped media message sent successfully: {len(images)} images, {len(videos)} videos", log_type="new_message")
-    except Exception as e:
-        log_message(f"Error sending grouped media message: {e}", log_type="error")
 
 def sendMissingMessages(channel: str, missing_numbers: list[int], author_name: str, icon_url: str | None, timestamp: datetime.datetime | None) -> None:
     """Send placeholders for specific missing message numbers."""
