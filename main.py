@@ -44,6 +44,7 @@ def sanitize_log_content(content: str) -> str:
     # Replace GitHub Personal Access Tokens with [REDACTED]
     sanitized = re.sub(r'github_pat_[A-Za-z0-9_]+', '[REDACTED]', content)
     sanitized = re.sub(r'ghp_[A-Za-z0-9_]+', '[REDACTED]', sanitized)
+    sanitized = re.sub(r'ghs_[A-Za-z0-9_]+', '[REDACTED]', sanitized)
     
     # Also handle generic token patterns in URLs
     sanitized = re.sub(r'://[^@\s]+@', '://[REDACTED]@', sanitized)
