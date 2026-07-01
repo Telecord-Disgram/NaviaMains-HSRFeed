@@ -11,7 +11,7 @@ import discord
 from discord import SyncWebhook, Embed, File
 from discord.ui import LayoutView, Container, TextDisplay, MediaGallery
 import concurrent.futures
-from config import WEBHOOK_URL, THREAD_ID, COOLDOWN, EMBED_COLOR, ERROR_PLACEHOLDER
+from config import WEBHOOK_URL, THREAD_ID, COOLDOWN, EMBED_COLOR
 
 TELEGRAM_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; Disgram/2.0)"}
 MAX_MEDIA_WORKERS = 8

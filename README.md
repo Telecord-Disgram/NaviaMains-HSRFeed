@@ -30,21 +30,14 @@ graph TD
     CheckZombies -- Yes --> WatchdogLoop
 
     SpawnFlask --> FlaskThread[Flask Thread: Listen on PORT]
-    FlaskThread --> ServeAPI[Serve Endpoints]
-    ServeAPI --> E1["GET / (Root Info Page)"]
-    ServeAPI --> E2["GET /health"]
-    ServeAPI --> E3["GET /logs"]
-    ServeAPI --> E4["GET /app-logs"]
-    ServeAPI --> E5["GET /git-status"]
-    ServeAPI --> E6["POST /force-commit"]
-    ServeAPI --> E7["POST /logs/clear"]
+    FlaskThread --> ServeAPI["Serve API Endpoints<br>(GET /, GET /health, GET /logs, GET /app-logs,<br>GET /git-status, POST /force-commit, POST /logs/clear)"]
 
     classDef proc fill:#3b82f6,stroke:#1d4ed8,color:#fff
     classDef decis fill:#f59e0b,stroke:#b45309,color:#fff
     classDef api fill:#8b5cf6,stroke:#6d28d9,color:#fff
     class Start,InitGit,SpawnBots,SpawnFlask,WatchdogLoop,RestartDead,RestartAll,FlaskThread proc
     class CheckHealth,CheckZombies decis
-    class ServeAPI,E1,E2,E3,E4,E5,E6,E7 api
+    class ServeAPI api
 ```
 
 ### 1.2 Scraper & Message Forwarding Pipeline
@@ -100,7 +93,7 @@ graph TD
 - **Discord Components V2**: Utilizes the layout model (`Container`, `TextDisplay`, and `MediaGallery`) rather than legacy embeds for cleaner rendering.
 - **Grouped Media Processing**: Support for up to 10 images and videos inside a single gallery component, preserved in their original visual order of appearance.
 - **Unsupported Large Videos**: Automatically detects videos that are too large to play or download inline in the Telegram web preview. It extracts their durations and thumbnails, forwarding them in the gallery with a descriptive label (e.g. `Media is too big (0:17)`).
-- **Document & File Placeholders**: Identifies attached documents and files from the preview, extracting their filenames and appending them as clean formatted placeholders (e.g., `-# Attached file(s): `README.md``) above the message link.
+- **Document & File Placeholders**: Identifies attached documents and files from the preview, extracting their filenames and appending them as clean formatted placeholders (e.g., "-# Attached file(s): `README.md`") above the message link.
 - **Collision-free Parallel Downloading**: Uses a thread pool capped at 8 workers to fetch media assets concurrently, utilizing unique filenames (timestamp, index, and random UUID chunks) to prevent concurrent download collisions in the webhook attachments.
 - **Targeted Video Fallback**: If an upload fails with `413 Payload Too Large`, the bot filters out video files larger than 10MB, replacing them with their Telegram CDN links, while still uploading smaller videos and images as attachments.
 - **Process Isolation**: Each channel scrapes in its own subprocess. If a subprocess crashes or hangs (zombie detection), the main watchdog restarts it.
