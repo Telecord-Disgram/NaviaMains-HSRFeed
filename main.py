@@ -511,9 +511,7 @@ def start_bot_processes():
             print(f"Starting bot for {channel}...")
             channel_name = extract_channel_name(channel)
             process = subprocess.Popen(
-                ["python", "webhook.py", channel_name],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                ["python", "webhook.py", channel_name]
             )
             processes.append(process)
         
@@ -558,9 +556,7 @@ if __name__ == "__main__":
                         print(f"Restarting process for {channel}...")
                         
                         new_process = subprocess.Popen(
-                            ["python", "webhook.py", channel_name],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE
+                            ["python", "webhook.py", channel_name]
                         )
                         processes[dead_idx] = new_process
             
