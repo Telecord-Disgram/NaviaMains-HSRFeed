@@ -144,12 +144,12 @@ cp .env.example .env
 ---
 
 ### 2. Git Persistence Settings
-Disgram automatically commits and pushes its state and application logs back to GitHub. You can authenticate using one of two options:
+Disgram automatically commits and pushes its state and application logs back to GitHub.
+> `USE_GIT` (Optional): Set to `false` to completely disable Git setup, initialization, commits, and pushes (ideal for simple self-hosted setups with no logs tracking using Git). Defaults to `true`.
 
-#### Option A: Personal Access Token (PAT)
-* `GITHUB_TOKEN`: Your personal access token with repository write scope.
+If `USE_GIT` is `true`, you can authenticate using one of two options:
 
-#### Option B: GitHub App (Preferred)
+#### Option A: GitHub App (Preferred)
 * `GITHUB_APP_ID` or `GITHUB_APP_CLIENT_ID`: Identifies the registered GitHub App.
 * `GITHUB_APP_INSTALLATION_ID`: The installation ID of the App on the target repository.
 * `GITHUB_APP_PRIVATE_KEY_PATH`: Local path to the private key (`.pem` file), or...
@@ -157,6 +157,9 @@ Disgram automatically commits and pushes its state and application logs back to 
 
 * `GITHUB_REPO_URL`: The repository Git clone URL (`https://github.com/username/repo.git`).
 * `GITHUB_DEPLOY_BRANCH`: The branch to push logs to (e.g., `azure-prod`).
+
+#### Option B: Personal Access Token (PAT)
+* `GITHUB_TOKEN`: Your personal access token with repository write scope.
 
 ---
 
