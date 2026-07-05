@@ -524,9 +524,12 @@ def sendMessage(msg_link: str, msg_text: str | None, media_items: list[dict],
             for item in media_status:
                 content_parts.append(item['url'])
             content_parts.append(f"[Message Link](<{msg_link}>) at <t:{unix_time}:f>")
-            
             fallback_content = "\n\n".join(content_parts)
-            
+            if len(fallback_content) > 4000:
+                link_part = f"[Message Link](<{msg_link}>) at <t:{unix_time}:f>"
+                allowed_len = 4000 - len(link_part) - 10
+                rest = "\n\n".join(content_parts[:-1])
+                fallback_content = rest[:allowed_len] + "...\n\n" + link_part
             success, _ = send_webhook_message(
                 WEBHOOK_URL,
                 THREAD_ID,

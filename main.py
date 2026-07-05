@@ -3,6 +3,7 @@ import time
 import threading
 import datetime
 import os
+import sys
 import psutil
 import requests
 import re
@@ -511,7 +512,7 @@ def start_bot_processes():
             print(f"Starting bot for {channel}...")
             channel_name = extract_channel_name(channel)
             process = subprocess.Popen(
-                ["python", "webhook.py", channel_name]
+                [sys.executable, "webhook.py", channel_name]
             )
             processes.append(process)
         
@@ -556,7 +557,7 @@ if __name__ == "__main__":
                         print(f"Restarting process for {channel}...")
                         
                         new_process = subprocess.Popen(
-                            ["python", "webhook.py", channel_name]
+                            [sys.executable, "webhook.py", channel_name]
                         )
                         processes[dead_idx] = new_process
             
