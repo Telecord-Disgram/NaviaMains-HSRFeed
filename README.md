@@ -115,15 +115,16 @@ graph TD
     Success -- No (Payload Too Large 413) --> ApplyFallback[Targeted Video Fallback]
     ApplyFallback --> LoopMedia[Iterate Downloaded Media]
     LoopMedia --> ExcludeVideos{"Is Video & Size > 10MB?"}
-    ExcludeVideos -- Yes --> ReplaceWithCDN[Replace with Telegram CDN URL / Thumbnail]
+    ExcludeVideos -- Yes --> DownloadThumb[Download Thumbnail & Re-upload to Discord]
     ExcludeVideos -- No --> KeepAttachment[Keep as File Attachment]
-    ReplaceWithCDN --> BuildFallbackLayout[Build Fallback Layout]
+    DownloadThumb --> BuildFallbackLayout[Build Fallback Layout]
     KeepAttachment --> BuildFallbackLayout
     BuildFallbackLayout --> RetryWebhook[Retry Send Webhook]
     
     RetryWebhook --> SuccessFallback{"Retry Successful?"}
     SuccessFallback -- Yes --> UpdateLog
     SuccessFallback -- No --> PlainTextFallback[Final Plain Text Fallback]
+    PlainTextFallback --> SuccessFinal{"Final Retry Successful?"}
     SuccessFinal -- Yes --> UpdateLog
     SuccessFinal -- No --> LogError[Log Error]
     LogError --> Cooldown
@@ -135,7 +136,7 @@ graph TD
     
     class Startbot,ScraperLoop,FetchTG,Cooldown,BuildLayout,SendWebhook,UpdateLog,BuildFallbackLayout,RetryWebhook,PlainTextFallback,LogError,ContainerBuild loop
     class ParseTG,Success,ExcludeVideos,SuccessFallback,SuccessFinal,CheckTelethon,MediaSuccess,SeparateComponents decis
-    class ApplyFallback,LoopMedia,ReplaceWithCDN,KeepAttachment fallback
+    class ApplyFallback,LoopMedia,DownloadThumb,KeepAttachment fallback
     class FetchTelethon,ProcessTelethonMedia,HTMLFallback,ProcessHTMLMedia,MediaGalleryItems,FileComponents telethon
 ```
 
