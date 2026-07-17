@@ -9,7 +9,7 @@ from dateutil import parser
 from bs4 import BeautifulSoup
 import discord
 from discord import SyncWebhook, Embed, File
-from discord.ui import LayoutView, Container, TextDisplay, MediaGallery
+from discord.ui import LayoutView, Container, TextDisplay, MediaGallery, File as UIFile
 import concurrent.futures
 from config import WEBHOOK_URL, THREAD_ID, COOLDOWN, EMBED_COLOR
 
@@ -349,6 +349,7 @@ def sendMessage(channel: str, message_ids: list[int], msg_link: str, msg_text: s
     # 3. Build files list and gallery items
     files = []
     gallery_items = []
+    ui_files = []
     media_status = []
     
     # If telethon couldn't fetch anything, fallback to HTML scraping is practically non-existent for high quality,
@@ -360,6 +361,9 @@ def sendMessage(channel: str, message_ids: list[int], msg_link: str, msg_text: s
         file_bytes = item['data']
         filename = item['filename']
         is_spoiler = item.get('is_spoiler', False)
+        
+        if is_spoiler and filename and not filename.startswith('SPOILER_'):
+            filename = 'SPOILER_' + filename
         
         fallback_url = None
         if idx < len(media_items):
@@ -378,8 +382,11 @@ def sendMessage(channel: str, message_ids: list[int], msg_link: str, msg_text: s
                 })
         else:
             if file_bytes and filename:
-                files.append(File(io.BytesIO(file_bytes), filename=filename, spoiler=is_spoiler))
-                gallery_items.append(discord.MediaGalleryItem(f"attachment://{filename}", spoiler=is_spoiler))
+                files.append(File(io.BytesIO(file_bytes), filename=filename))
+                if itype in ['image', 'video']:
+                    gallery_items.append(discord.MediaGalleryItem(f"attachment://{filename}", spoiler=is_spoiler))
+                else:
+                    ui_files.append(UIFile(f"attachment://{filename}"))
                 media_status.append({
                     'type': itype,
                     'url': fallback_url or '',
@@ -415,6 +422,9 @@ def sendMessage(channel: str, message_ids: list[int], msg_link: str, msg_text: s
         if gallery_items:
             gallery = MediaGallery(*gallery_items)
             container.add_item(gallery)
+            
+        for uf in ui_files:
+            container.add_item(uf)
             
         view = LayoutView()
         view.add_item(container)
@@ -463,6 +473,9 @@ def sendMessage(channel: str, message_ids: list[int], msg_link: str, msg_text: s
             if fallback_gallery_items:
                 fallback_gallery = MediaGallery(*fallback_gallery_items)
                 fallback_container.add_item(fallback_gallery)
+                
+            for uf in ui_files:
+                fallback_container.add_item(uf)
                 
             fallback_view = LayoutView()
             fallback_view.add_item(fallback_container)
