@@ -153,7 +153,7 @@ def get_cached_external_checks():
             telegram_ok = check_telegram_connectivity()
             discord_ok, discord_msg = check_discord_webhook()
             
-            from telethon_client import check_telethon_health, get_mtproto_proxy_info
+            from telethon_client import check_telethon_health
             telethon_ok = check_telethon_health()
             
             _ext_check_cache.update({
@@ -235,7 +235,6 @@ def restart_all_processes():
 def health_check():
     global last_health_check
     last_health_check = datetime.datetime.now()
-    from telethon_client import get_mtproto_proxy_info
     
     # Define wrapper functions for async execution
     def get_process_health():
@@ -297,7 +296,6 @@ def health_check():
         "external_services": {
             "telegram_reachable": telegram_ok,
             "telethon_authorized": telethon_ok,
-            "mtproto_proxy": get_mtproto_proxy_info(),
             "discord_webhook": {
                 "accessible": discord_ok,
                 "message": discord_msg
@@ -315,8 +313,7 @@ def health_check():
             "thread_id_configured": THREAD_ID is not None,
             "webhook_configured": WEBHOOK_URL and "{webhookID}" not in WEBHOOK_URL,
             "channels_count": len(Channels),
-            "git_commits_configured": get_git_manager() is not None,
-            "mtproto_proxy_configured": get_mtproto_proxy_info()["configured"]
+            "git_commits_configured": get_git_manager() is not None
         }
     }
     
