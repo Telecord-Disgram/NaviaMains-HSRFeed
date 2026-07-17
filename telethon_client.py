@@ -106,9 +106,12 @@ async def _async_get_telethon_media(channel: str, message_ids: list[int]):
             if hasattr(msg.media, 'photo'):
                 item_type = 'image'
             elif hasattr(msg.media, 'document'):
-                # Check mime type to see if it's a video
-                if any(attr.mime_type.startswith('video/') for attr in msg.media.document.attributes if hasattr(attr, 'mime_type')):
+                # Check mime type to see if it's a video or image (e.g. uncompressed uploads)
+                mime = getattr(msg.media.document, 'mime_type', '')
+                if mime.startswith('video/'):
                     item_type = 'video'
+                elif mime.startswith('image/'):
+                    item_type = 'image'
                 else:
                     item_type = 'document'
                     
