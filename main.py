@@ -123,7 +123,8 @@ _ext_check_cache = {
     "last_check_time": 0.0,
     "telegram_ok": False,
     "discord_ok": False,
-    "discord_msg": "Not checked yet"
+    "discord_msg": "Not checked yet",
+    "telethon_ok": False
 }
 _ext_check_lock = threading.Lock()
 
@@ -137,14 +138,18 @@ def get_cached_external_checks():
             telegram_ok = check_telegram_connectivity()
             discord_ok, discord_msg = check_discord_webhook()
             
+            from telethon_client import check_telethon_health
+            telethon_ok = check_telethon_health()
+            
             _ext_check_cache.update({
                 "last_check_time": current_time,
                 "telegram_ok": telegram_ok,
                 "discord_ok": discord_ok,
-                "discord_msg": discord_msg
+                "discord_msg": discord_msg,
+                "telethon_ok": telethon_ok
             })
         
-        return _ext_check_cache["telegram_ok"], _ext_check_cache["discord_ok"], _ext_check_cache["discord_msg"]
+        return _ext_check_cache["telegram_ok"], _ext_check_cache["discord_ok"], _ext_check_cache["discord_msg"], _ext_check_cache["telethon_ok"]
 
 def check_log_freshness():
     log_file_path = "Disgram.log"
@@ -244,7 +249,7 @@ def health_check():
         
         # Collect results
         alive_count, dead_processes = future_process_health.result()
-        telegram_ok, discord_ok, discord_msg = future_external.result()
+        telegram_ok, discord_ok, discord_msg, telethon_ok = future_external.result()
         log_fresh, log_msg, log_last_modified = future_log.result()
         system_stats = future_system.result()
         git_commit_status = future_git.result()
@@ -275,6 +280,7 @@ def health_check():
         },
         "external_services": {
             "telegram_reachable": telegram_ok,
+            "telethon_authorized": telethon_ok,
             "discord_webhook": {
                 "accessible": discord_ok,
                 "message": discord_msg
