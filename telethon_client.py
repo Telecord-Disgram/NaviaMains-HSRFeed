@@ -1,5 +1,6 @@
 import os
 import asyncio
+import threading
 from telethon.sync import TelegramClient
 from telethon.sessions import StringSession
 import dotenv
@@ -7,12 +8,27 @@ import dotenv
 dotenv.load_dotenv()
 
 _client = None
-_client_lock = asyncio.Lock()
+_client_lock = None
+_telethon_loop = asyncio.new_event_loop()
+_loop_thread = None
+
+def _start_background_loop(loop: asyncio.AbstractEventLoop) -> None:
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
+
+def _ensure_loop_running():
+    global _loop_thread
+    if _loop_thread is None or not _loop_thread.is_alive():
+        _loop_thread = threading.Thread(target=_start_background_loop, args=(_telethon_loop,), daemon=True)
+        _loop_thread.start()
 
 async def _get_client() -> TelegramClient:
     """Get or initialize the Telethon client singleton."""
-    global _client
+    global _client, _client_lock
     
+    if _client_lock is None:
+        _client_lock = asyncio.Lock()
+        
     if _client is not None and _client.is_connected():
         return _client
         
@@ -27,8 +43,8 @@ async def _get_client() -> TelegramClient:
         if not api_id or not api_hash or not session_string:
             raise ValueError("Telethon credentials not configured in .env")
             
-        # Initialize client
-        _client = TelegramClient(StringSession(session_string), int(api_id), api_hash)
+        # Initialize client (bound to the background thread's loop)
+        _client = TelegramClient(StringSession(session_string), int(api_id), api_hash, loop=_telethon_loop)
         await _client.connect()
         
         if not await _client.is_user_authorized():
@@ -121,7 +137,9 @@ def get_telethon_media(channel: str, message_ids: list[int]):
     Synchronous wrapper to fetch media via Telethon.
     Used by webhook.py which is currently synchronous.
     """
-    return asyncio.run(_async_get_telethon_media(channel, message_ids))
+    _ensure_loop_running()
+    future = asyncio.run_coroutine_threadsafe(_async_get_telethon_media(channel, message_ids), _telethon_loop)
+    return future.result()
 
 async def _async_check_health() -> bool:
     try:
@@ -137,4 +155,6 @@ def check_telethon_health() -> bool:
     """
     if not os.getenv("TG_SESSION_STRING"):
         return False
-    return asyncio.run(_async_check_health())
+    _ensure_loop_running()
+    future = asyncio.run_coroutine_threadsafe(_async_check_health(), _telethon_loop)
+    return future.result()
