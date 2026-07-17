@@ -7,6 +7,8 @@ import dotenv
 
 dotenv.load_dotenv()
 
+TELETHON_CONFIGURED = bool(os.getenv("TG_API_ID") and os.getenv("TG_API_HASH") and os.getenv("TG_SESSION_STRING"))
+
 _client = None
 _client_lock = None
 _telethon_loop = asyncio.new_event_loop()
@@ -21,6 +23,48 @@ def _ensure_loop_running():
     if _loop_thread is None or not _loop_thread.is_alive():
         _loop_thread = threading.Thread(target=_start_background_loop, args=(_telethon_loop,), daemon=True)
         _loop_thread.start()
+
+from telethon import connection
+
+def _get_mtproto_proxy():
+    """Build MTProto proxy configuration tuple if TG_MTPROTO_IP and secret are provided."""
+    ip = os.getenv("TG_MTPROTO_IP")
+    if not ip:
+        return None, None
+        
+    try:
+        port = int(os.getenv("TG_MTPROTO_PORT", "443"))
+    except ValueError:
+        port = 443
+        
+    secret = os.getenv("TG_MTPROTO_SECRET")
+    secret_path = os.getenv("TG_MTPROTO_SECRET_PATH")
+    
+    if secret_path and os.path.exists(secret_path):
+        try:
+            with open(secret_path, "r", encoding="utf-8") as f:
+                secret = f.read().strip()
+        except Exception:
+            pass
+            
+    if not secret:
+        return None, None
+        
+    secret = secret.replace("\\n", "\n").strip()
+    return connection.ConnectionTcpMTProxyRandomizedIntermediate, (ip, port, secret)
+
+def get_mtproto_proxy_info() -> dict:
+    """Return status details of MTProto proxy for health endpoint."""
+    conn_cls, proxy_tuple = _get_mtproto_proxy()
+    if conn_cls and proxy_tuple:
+        return {
+            "configured": True,
+            "ip": proxy_tuple[0],
+            "port": proxy_tuple[1]
+        }
+    return {
+        "configured": False
+    }
 
 async def _get_client() -> TelegramClient:
     """Get or initialize the Telethon client singleton."""
@@ -43,12 +87,22 @@ async def _get_client() -> TelegramClient:
         if not api_id or not api_hash or not session_string:
             raise ValueError("Telethon credentials not configured in .env")
             
+        # Build client connection parameters
+        client_kwargs = {'loop': _telethon_loop}
+        conn_cls, proxy_tuple = _get_mtproto_proxy()
+        if conn_cls and proxy_tuple:
+            client_kwargs['connection'] = conn_cls
+            client_kwargs['proxy'] = proxy_tuple
+            print(f"Configuring Telethon with MTProto proxy at {proxy_tuple[0]}:{proxy_tuple[1]}")
+            
         # Initialize client (bound to the background thread's loop)
-        _client = TelegramClient(StringSession(session_string), int(api_id), api_hash, loop=_telethon_loop)
+        _client = TelegramClient(StringSession(session_string), int(api_id), api_hash, **client_kwargs)
         await _client.connect()
         
         if not await _client.is_user_authorized():
             raise Exception("Telethon session is invalid or expired.")
+            
+        print(f"Telethon connected successfully to MTProto DC {getattr(_client.session, 'dc_id', 'Unknown')} at {_client.session.server_address}")
             
         return _client
 

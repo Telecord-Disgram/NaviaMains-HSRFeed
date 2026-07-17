@@ -9,8 +9,8 @@ import requests
 import re
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from flask import Flask, jsonify, Response
-from config import Channels, WEBHOOK_URL, THREAD_ID, COOLDOWN
+from flask import Flask, jsonify, Response, request
+from config import Channels, WEBHOOK_URL, THREAD_ID, COOLDOWN, API_BEARER_TOKEN
 from git_manager import initialize_git_manager
 
 def get_git_manager():
@@ -58,6 +58,21 @@ last_health_check = None
 health_status = {"status": "starting", "details": {}}
 
 app = Flask(__name__)
+
+def verify_bearer_token():
+    """Verify Bearer token for administrative POST endpoints."""
+    if not API_BEARER_TOKEN:
+        return False, (jsonify({"error": "Unauthorized: API Bearer Token is not configured on server"}), 401)
+        
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return False, (jsonify({"error": "Unauthorized: Missing Authorization header"}), 401)
+        
+    provided_token = auth_header.split("Bearer ", 1)[1].strip()
+    if provided_token != API_BEARER_TOKEN:
+        return False, (jsonify({"error": "Forbidden: Invalid Bearer Token"}), 403)
+        
+    return True, None
 
 def initialize_disgram_log():
     existing_links = set()
@@ -138,7 +153,7 @@ def get_cached_external_checks():
             telegram_ok = check_telegram_connectivity()
             discord_ok, discord_msg = check_discord_webhook()
             
-            from telethon_client import check_telethon_health
+            from telethon_client import check_telethon_health, get_mtproto_proxy_info
             telethon_ok = check_telethon_health()
             
             _ext_check_cache.update({
@@ -220,6 +235,7 @@ def restart_all_processes():
 def health_check():
     global last_health_check
     last_health_check = datetime.datetime.now()
+    from telethon_client import get_mtproto_proxy_info
     
     # Define wrapper functions for async execution
     def get_process_health():
@@ -281,6 +297,7 @@ def health_check():
         "external_services": {
             "telegram_reachable": telegram_ok,
             "telethon_authorized": telethon_ok,
+            "mtproto_proxy": get_mtproto_proxy_info(),
             "discord_webhook": {
                 "accessible": discord_ok,
                 "message": discord_msg
@@ -298,7 +315,8 @@ def health_check():
             "thread_id_configured": THREAD_ID is not None,
             "webhook_configured": WEBHOOK_URL and "{webhookID}" not in WEBHOOK_URL,
             "channels_count": len(Channels),
-            "git_commits_configured": get_git_manager() is not None
+            "git_commits_configured": get_git_manager() is not None,
+            "mtproto_proxy_configured": get_mtproto_proxy_info()["configured"]
         }
     }
     
@@ -356,6 +374,10 @@ def view_logs():
 @app.route('/logs/clear', methods=['POST'])
 def clear_disgram_log():
     """Clear the contents of Disgram.log while preserving latest message links for each channel"""
+    is_valid, error_response = verify_bearer_token()
+    if not is_valid:
+        return error_response
+        
     try:
         log_file_path = "Disgram.log"
         
@@ -463,6 +485,10 @@ def view_app_logs():
 @app.route('/force-commit', methods=['POST'])
 def force_commit():
     """Endpoint to force immediate commit of all changes to repository"""
+    is_valid, error_response = verify_bearer_token()
+    if not is_valid:
+        return error_response
+
     git_manager = get_git_manager()
     
     if not git_manager:
