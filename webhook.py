@@ -416,21 +416,39 @@ def sendMessage(channel: str, message_ids: list[int], msg_link: str, msg_text: s
             filename = 'SPOILER_' + filename
         
         duration = None
+        fallback_url = None
         if idx < len(media_items):
             fallback_url = media_items[idx]['url']
             duration = media_items[idx].get('duration', None)
             
+        dur_str = f" ({duration})" if duration and duration != 'Too large' else ""
+            
         if is_too_large:
             if fallback_url:
-                gallery_items.append(discord.MediaGalleryItem(fallback_url, description=f"Media is too big", spoiler=is_spoiler))
-                media_status.append({
-                    'type': 'video_too_large',
-                    'url': fallback_url,
-                    'duration': duration or 'Too large',
-                    'data': None,
-                    'filename': None,
-                    'attached': False
-                })
+                thumb_bytes, thumb_filename = download_image(fallback_url)
+                desc_label = f"Media is too big{dur_str}"
+                
+                if thumb_bytes and thumb_filename:
+                    files.append(File(io.BytesIO(thumb_bytes), filename=thumb_filename))
+                    gallery_items.append(discord.MediaGalleryItem(f"attachment://{thumb_filename}", description=desc_label, spoiler=is_spoiler))
+                    media_status.append({
+                        'type': 'video_too_large',
+                        'url': fallback_url,
+                        'duration': duration,
+                        'data': thumb_bytes,
+                        'filename': thumb_filename,
+                        'attached': True
+                    })
+                else:
+                    gallery_items.append(discord.MediaGalleryItem(fallback_url, description=desc_label, spoiler=is_spoiler))
+                    media_status.append({
+                        'type': 'video_too_large',
+                        'url': fallback_url,
+                        'duration': duration,
+                        'data': None,
+                        'filename': None,
+                        'attached': False
+                    })
         else:
             if file_bytes and filename:
                 files.append(File(io.BytesIO(file_bytes), filename=filename))

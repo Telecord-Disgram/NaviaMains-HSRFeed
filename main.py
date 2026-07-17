@@ -210,7 +210,7 @@ def restart_all_processes():
     """Restart all bot processes when they appear to be zombified"""
     global processes, bot_start_time
     
-    print("⚠️  Log freshness check failed - restarting all bot processes...")
+    logger.warning("Log freshness check failed - restarting all bot processes...")
     
     # Terminate existing processes
     for process in processes:
@@ -221,7 +221,7 @@ def restart_all_processes():
             except subprocess.TimeoutExpired:
                 process.kill()
             except Exception as e:
-                print(f"Error terminating process: {e}")
+                logger.error(f"Error terminating process: {e}")
     
     # Clear the processes list
     processes.clear()
@@ -229,7 +229,7 @@ def restart_all_processes():
     # Restart all processes
     start_bot_processes()
     
-    print(f"✅ Restarted {len(processes)} bot processes due to stale logs")
+    logger.info(f"Restarted {len(processes)} bot processes due to stale logs")
 
 @app.route('/health')
 def health_check():
@@ -534,25 +534,25 @@ def start_bot_processes():
     # Initialize Disgram.log with channel/message links from environment
     initialize_disgram_log()
     
-    print(f"Starting Disgram bot with {len(Channels)} channels...")
+    logger.info(f"Starting Disgram bot with {len(Channels)} channels...")
     
     try:
         for channel in Channels:
-            print(f"Starting bot for {channel}...")
+            logger.info(f"Starting bot for {channel}...")
             channel_name = extract_channel_name(channel)
             process = subprocess.Popen(
                 [sys.executable, "webhook.py", channel_name]
             )
             processes.append(process)
         
-        print(f"Started {len(processes)} bot processes successfully.")
+        logger.info(f"Started {len(processes)} bot processes successfully.")
         
     except Exception as e:
-        print(f"Error starting bot processes: {e}")
+        logger.error(f"Error starting bot processes: {e}")
 
 def run_flask_server():
     port = int(os.environ.get('PORT', 5000))
-    print(f"Starting health check server on port {port}...")
+    logger.info(f"Starting health check server on port {port}...")
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 if __name__ == "__main__":
@@ -578,12 +578,12 @@ if __name__ == "__main__":
             
             alive_count, dead_processes = check_process_health()
             if dead_processes:
-                print(f"Detected {len(dead_processes)} dead processes, restarting...")
+                logger.warning(f"Detected {len(dead_processes)} dead processes, restarting...")
                 for dead_idx in dead_processes:
                     if dead_idx < len(processes) and dead_idx < len(Channels):
                         channel = Channels[dead_idx]
                         channel_name = extract_channel_name(channel)
-                        print(f"Restarting process for {channel}...")
+                        logger.info(f"Restarting process for {channel}...")
                         
                         new_process = subprocess.Popen(
                             [sys.executable, "webhook.py", channel_name]
@@ -593,12 +593,12 @@ if __name__ == "__main__":
             # Check if logs are stale (indicates zombie processes)
             log_fresh, log_msg, log_last_modified = check_log_freshness()
             if not log_fresh and alive_count > 0:  # Only restart if we have processes that should be working
-                print(f"🚨 ZOMBIE PROCESSES DETECTED: {log_msg}")
-                print("All processes appear alive but logs are stale - restarting all processes...")
+                logger.warning(f"ZOMBIE PROCESSES DETECTED: {log_msg}")
+                logger.warning("All processes appear alive but logs are stale - restarting all processes...")
                 restart_all_processes()
             
     except KeyboardInterrupt:
-        print("\nShutting down all bots...")
+        logger.info("Shutting down all bots...")
         
         # Force final commit before shutdown
         git_manager = get_git_manager()
@@ -618,4 +618,4 @@ if __name__ == "__main__":
                     process.kill()
         
 
-        print("All bots have been stopped.")
+        logger.info("All bots have been stopped.")

@@ -53,7 +53,12 @@ async def _get_client() -> TelegramClient:
         if not await _client.is_user_authorized():
             raise Exception("Telethon session is invalid or expired.")
             
-        print(f"Telethon connected successfully to MTProto DC {getattr(_client.session, 'dc_id', 'Unknown')} at {_client.session.server_address}")
+        msg = f"Telethon connected successfully to DC {getattr(_client.session, 'dc_id', 'Unknown')} at {_client.session.server_address}"
+        try:
+            from webhook import log_message
+            log_message(msg, log_type="telethon")
+        except Exception:
+            print(msg)
             
         return _client
 
@@ -105,7 +110,9 @@ async def _async_get_telethon_media(channel: str, message_ids: list[int]):
             except OSError:
                 pass
                 
-            is_too_large = file_size > (10 * 1024 * 1024)
+            # The user explicitly requested to ALWAYS attempt to upload the original video first.
+            # If Discord rejects it (HTTP 413), the webhook.py fallback will specifically target files > 10MB.
+            is_too_large = False
             
             item_type = 'document'
             if hasattr(msg.media, 'photo'):
@@ -137,7 +144,12 @@ async def _async_get_telethon_media(channel: str, message_ids: list[int]):
         return downloaded_items
         
     except Exception as e:
-        print(f"Error fetching media via Telethon for {channel}/{message_ids}: {e}")
+        msg = f"Error fetching media via Telethon for {channel}/{message_ids}: {e}"
+        try:
+            from webhook import log_message
+            log_message(msg, log_type="error")
+        except Exception:
+            print(msg)
         return []
 
 def get_telethon_media(channel: str, message_ids: list[int]):
