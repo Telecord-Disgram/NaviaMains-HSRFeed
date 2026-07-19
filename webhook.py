@@ -17,10 +17,9 @@ TELEGRAM_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; Disgram/2.0)"}
 MAX_MEDIA_WORKERS = 3
 
 import logging
-from logging_config import configure_logging, DisgramLogWriter
+from logging_config import configure_logging, is_message_logged
 
 logger = logging.getLogger("Webhook")
-disgram_log = DisgramLogWriter()
 
 def scrapeTelegramMessageBox(channel: str) -> list:
     """Scrape the latest messages from the Telegram channel preview page."""
@@ -695,7 +694,7 @@ def main(channels: list[str]) -> None:
                     last_processed_number = current_number
                     continue
 
-                if disgram_log.is_message_logged(tg_channel, current_number):
+                if is_message_logged(tg_channel, current_number):
                     logger.debug(f"Skipping already logged message: {msg_link}")
                     continue
 
@@ -724,8 +723,7 @@ def main(channels: list[str]) -> None:
                             logger.error(f"Failed to fetch text via Telethon: {e}")
 
                 if msg_link not in msg_log:
-                    logger.info(f"New message found: {msg_link}")
-                    disgram_log.append(msg_link)
+                    logger.info(f"New message sent: {msg_link}")
                     msg_temp.append(msg_link)
                     
                     message_ids = [current_number + i for i in range(total_media)] if total_media > 1 else [current_number]

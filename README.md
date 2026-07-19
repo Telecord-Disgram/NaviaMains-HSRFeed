@@ -7,7 +7,7 @@ A Python-based application that scrapes public Telegram channels and forwards me
 - **Discord Components V2**: Beautiful layouts separating core content from metadata (e.g. timestamps, forwards).
 - **Ephemeral Workers**: Optimized for low-memory environments like Render. Orchestrates scraping in isolated, short-lived chunks that automatically release memory.
 - **Git Persistence**: Automatically commits and pushes log files back to GitHub, keeping state safely stored without needing a database.
-- **Health & Monitoring**: Built-in Flask API with diagnostics (`/health`, `/logs`) and Bearer Token protected administrative endpoints.
+- **Health & Monitoring**: Built-in Flask API with diagnostics (`/health`), soft/hard log cleanup (`/logs/clear`, `/logs/purge`), and Bearer Token protected administrative endpoints.
 - **Telethon Integration (Optional)**: Provide Telegram API credentials for original, uncompressed media downloads, native file attachments, full long-text parsing, and hidden spoiler protection.
 
 ## Configuration
@@ -68,9 +68,9 @@ cp .env.example .env
 Disgram is designed to run stably on highly constrained environments (like Render's Free Tier with 512MB RAM). 
 Instead of running infinite parallel loops, `main.py` acts as an orchestrator. It divides your Telegram channels into chunks and spawns sequential, single-pass `webhook.py` workers. Once a chunk finishes, memory is cleared via Garbage Collection (`gc.collect()`) before the next chunk starts.
 
-### The Source of Truth: `Disgram.log`
-On ephemeral environments, local databases or log files disappear when the container sleeps. Disgram solves this by making `Disgram.log` the single source of truth for tracking which messages have been sent. 
-A background manager periodically commits and pushes this log to GitHub. Internal endpoints (`/logs/clear`) automatically prune the log to keep only the latest message markers, ensuring the file stays small and performant indefinitely.
+### Unified Logging Architecture & `Disgram.log`
+On ephemeral environments, local databases or log files disappear when the container sleeps. Disgram solves this by unifying all application logs and state into a single file: `Disgram.log`. 
+This file acts as the single source of truth for tracking which messages have been sent. A background manager periodically commits and pushes this log to GitHub. Internal endpoints (`/logs/clear` for soft cleans, `/logs/purge` for hard cleans) or automatic overflow thresholds will periodically prune the file, discarding transient `INFO` system logs while permanently keeping your latest message markers safely preserved.
 
 ### 1. Subprocess Orchestration Diagram
 

@@ -18,7 +18,7 @@ def get_git_manager():
     from git_manager import git_log_manager
     return git_log_manager
 
-from logging_config import configure_logging
+from logging_config import configure_logging, get_disgram_handler
 
 # Configure logging for the main application
 configure_logging(process_name="main")
@@ -350,60 +350,22 @@ def view_logs():
 
 @app.route('/logs/clear', methods=['POST'])
 def clear_disgram_log():
-    """Clear the contents of Disgram.log while preserving latest message links for each channel"""
+    """Clear the contents of Disgram.log while preserving latest message links and warnings/errors"""
     is_valid, error_response = verify_bearer_token()
     if not is_valid:
         return error_response
         
     try:
-        log_file_path = "Disgram.log"
-        
-        if not os.path.exists(log_file_path):
-            return jsonify({
-                "status": "error",
-                "message": "Disgram.log file not found"
-            }), 404
-        
-        header_line = None
-        latest_messages = {}
-        preserved_lines = []
-        
-        with open(log_file_path, 'r', encoding='utf-8') as log_file:
-            for line in log_file:
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                if "Add your message links" in stripped:
-                    header_line = stripped
-                    continue
-                
-                matches = re.findall(r'https://t\.me/([^/\s]+)/(\d+)', stripped)
-                for channel, msg_num in matches:
-                    num = int(msg_num)
-                    if channel not in latest_messages or num > latest_messages[channel]:
-                        latest_messages[channel] = num
-                        
-                if any(level in stripped for level in ("WARNING", "ERROR", "CRITICAL")):
-                    preserved_lines.append(stripped)
-        
-        channel_links = [f"https://t.me/{channel}/{msg_num}" 
-                        for channel, msg_num in sorted(latest_messages.items())]
-        
-        with open(log_file_path, 'w', encoding='utf-8') as log_file:
-            if header_line:
-                log_file.write(f"{header_line}\n")
-            for link in channel_links:
-                log_file.write(f"{link}\n")
-            for p_line in preserved_lines:
-                log_file.write(f"{p_line}\n")
-        
-        logger.info(f"Disgram.log cleared successfully, preserving {len(channel_links)} latest channel links")
+        handler = get_disgram_handler()
+        if not handler:
+            return jsonify({"status": "error", "message": "DisgramLogHandler not initialized"}), 500
+            
+        handler.trigger_cleanup(hard=False)
+        logger.info("Disgram.log cleared successfully (soft clean)")
         
         return jsonify({
             "status": "success",
-            "message": "Disgram.log cleared successfully",
-            "preserved_links": len(channel_links),
-            "latest_messages": channel_links
+            "message": "Disgram.log cleared successfully (warnings/errors preserved)"
         })
         
     except Exception as e:
@@ -413,54 +375,32 @@ def clear_disgram_log():
             "message": f"Error clearing log file: {str(e)}"
         }), 500
 
-@app.route('/app-logs')
-def view_app_logs():
-    """View application logs (app.log)"""
+@app.route('/logs/purge', methods=['POST'])
+def purge_disgram_log():
+    """Hard clear Disgram.log, preserving ONLY latest message links (dropping warnings/errors)"""
+    is_valid, error_response = verify_bearer_token()
+    if not is_valid:
+        return error_response
+        
     try:
-        log_file_path = "app.log"
-        
-        if not os.path.exists(log_file_path):
-            return Response(
-                "app.log file not found",
-                status=404,
-                mimetype='text/plain'
-            )
-        
-        with open(log_file_path, 'r', encoding='utf-8') as file:
-            lines = file.readlines()
+        handler = get_disgram_handler()
+        if not handler:
+            return jsonify({"status": "error", "message": "DisgramLogHandler not initialized"}), 500
             
-        # Show last 500 lines for application logs
-        last_lines = lines[-500:] if len(lines) > 500 else lines
+        handler.trigger_cleanup(hard=True)
+        logger.info("Disgram.log purged successfully (hard clean)")
         
-        # Sanitize log content to remove sensitive information
-        log_content = sanitize_log_content(''.join(last_lines))
-        
-        total_lines = len(lines)
-        showing_lines = len(last_lines)
-        header = f"Disgram Application Log Viewer\n"
-        header += f"Total lines in log: {total_lines}\n"
-        header += f"Showing last {showing_lines} lines\n"
-        header += f"Log file: {os.path.abspath(log_file_path)}\n"
-        header += f"Last modified: {datetime.datetime.fromtimestamp(os.path.getmtime(log_file_path)).isoformat()}\n"
-        header += "=" * 80 + "\n\n"
-        
-        response_content = header + log_content
-        
-        return Response(
-            response_content,
-            mimetype='text/plain',
-            headers={
-                'Content-Type': 'text/plain; charset=utf-8',
-                'Cache-Control': 'no-cache'
-            }
-        )
+        return jsonify({
+            "status": "success",
+            "message": "Disgram.log purged successfully (only message markers preserved)"
+        })
         
     except Exception as e:
-        return Response(
-            f"Error reading application log file: {str(e)}",
-            status=500,
-            mimetype='text/plain'
-        )
+        logger.error(f"Error purging Disgram.log: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": f"Error purging log file: {str(e)}"
+        }), 500
 
 @app.route('/force-commit', methods=['POST'])
 def force_commit():
