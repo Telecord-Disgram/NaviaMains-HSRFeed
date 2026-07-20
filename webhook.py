@@ -9,33 +9,17 @@ from dateutil import parser
 from bs4 import BeautifulSoup
 import discord
 from discord import SyncWebhook, Embed, File
-from discord.ui import LayoutView, Container, TextDisplay, MediaGallery
+from discord.ui import LayoutView, Container, TextDisplay, MediaGallery, File as UIFile
 import concurrent.futures
-from config import WEBHOOK_URL, THREAD_ID, COOLDOWN, EMBED_COLOR
+from config import WEBHOOK_URL, THREAD_ID, COOLDOWN, EMBED_COLOR, MAX_FILESIZE_BYTES
 
 TELEGRAM_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; Disgram/2.0)"}
-MAX_MEDIA_WORKERS = 8
+MAX_MEDIA_WORKERS = 3
 
-def log_message(message: str, log_type: str = "info") -> None:
-    """Log messages to console and to Disgram.log for specific message types."""
-    timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    log_entry = f"{timestamp} {message}"
-    print(log_entry)
-    if log_type in ["error", "new_message", "status"]:
-        with open("Disgram.log", "a", encoding="utf-8") as log_file:
-            log_file.write(log_entry + "\n")
+import logging
+from logging_config import configure_logging, is_message_logged
 
-def is_message_logged(channel: str, number: int) -> bool:
-    """Check if the given message number has already been logged for the channel."""
-    try:
-        with open("Disgram.log", "r", encoding="utf-8") as log_file:
-            for line in log_file:
-                match = re.search(rf"https://t.me/{channel}/(\d+)", line)
-                if match and int(match.group(1)) >= number:
-                    return True
-    except FileNotFoundError:
-        pass
-    return False
+logger = logging.getLogger("Webhook")
 
 def scrapeTelegramMessageBox(channel: str) -> list:
     """Scrape the latest messages from the Telegram channel preview page."""
@@ -43,18 +27,18 @@ def scrapeTelegramMessageBox(channel: str) -> list:
     retry_delay = 2
     for attempt in range(max_retries):
         try:
-            log_message(f"Scraping messages from Telegram channel: {channel} (Attempt {attempt + 1})")
+            logger.info(f"Scraping messages from Telegram channel: {channel} (Attempt {attempt + 1})")
             tg_html = requests.get(f'https://t.me/s/{channel}', headers=TELEGRAM_HEADERS, timeout=10)
             tg_html.raise_for_status()
             tg_soup = BeautifulSoup(tg_html.text, 'html.parser')
             return tg_soup.find_all('div', {'class': 'tgme_widget_message_wrap js-widget_message_wrap'})
         except requests.exceptions.RequestException as e:
-            log_message(f"Error scraping Telegram: {e}", log_type="error")
+            logger.error(f"Error scraping Telegram: {e}")
             if attempt < max_retries - 1:
                 time.sleep(retry_delay)
                 retry_delay *= 2
             else:
-                log_message("Max retries reached. Skipping this iteration.", log_type="error")
+                logger.error("Max retries reached. Skipping this iteration.")
                 return []
     return []
 
@@ -158,7 +142,7 @@ def getTextFromIndividualMessage(msg_link: str) -> str | None:
                         return content
             return None
         except Exception as e:
-            log_message(f"Error fetching text from individual message {msg_link}: {e}", log_type="error")
+            logger.error(f"Error fetching text from individual message {msg_link}: {e}")
             if attempt < max_retries - 1:
                 time.sleep(retry_delay)
             else:
@@ -267,6 +251,28 @@ def getTimestamp(tg_box) -> datetime.datetime | None:
         return parser.isoparse(time_element['datetime'])
     return None
 
+def getForwardInfo(tg_box) -> dict | None:
+    """Extract forwarded message info."""
+    forward = tg_box.find(class_='tgme_widget_message_forwarded_from')
+    if forward:
+        name_el = forward.find(class_='tgme_widget_message_forwarded_from_name')
+        name = name_el.text.strip() if name_el else "Unknown"
+        href = name_el['href'] if name_el and 'href' in name_el.attrs else None
+        return {"name": name, "href": href}
+    return None
+
+def getReplyInfo(tg_box) -> dict | None:
+    """Extract replied message info."""
+    reply = tg_box.find(class_='tgme_widget_message_reply')
+    if reply:
+        author_el = reply.find(class_='tgme_widget_message_author_name')
+        author = author_el.text.strip() if author_el else "Unknown"
+        text_el = reply.find(class_='tgme_widget_message_text') or reply.find(class_='js-message_reply_text')
+        text = text_el.text.strip() if text_el else "Unknown"
+        href = reply['href'] if 'href' in reply.attrs else None
+        return {"author": author, "text": text, "href": href}
+    return None
+
 def download_file(url: str | None, prefix: str, ext_fallback: str, index: int = 0, timeout: int = 10) -> tuple[bytes | None, str | None]:
     """Download a file from url and return raw bytes and filename."""
     if not url:
@@ -275,9 +281,14 @@ def download_file(url: str | None, prefix: str, ext_fallback: str, index: int = 
     retry_delay = 2
     for attempt in range(max_retries):
         try:
-            response = requests.get(url, headers=TELEGRAM_HEADERS, timeout=timeout)
+            response = requests.get(url, headers=TELEGRAM_HEADERS, stream=True, timeout=timeout)
             response.raise_for_status()
             
+            content_length = int(response.headers.get('Content-Length', 0))
+            if content_length > MAX_FILESIZE_BYTES:
+                logger.debug(f"Skipping download for {url} as it exceeds MAX_FILESIZE_BYTES ({content_length} bytes)")
+                return None, None
+                
             content_bytes = response.content
             if not content_bytes:
                 raise ValueError("Downloaded file content is empty (0 bytes)")
@@ -295,7 +306,7 @@ def download_file(url: str | None, prefix: str, ext_fallback: str, index: int = 
             filename = f"{prefix}_{int(time.time())}_{unique_id}_{index}_{attempt}{ext}"
             return content_bytes, filename
         except Exception as e:
-            log_message(f"Error downloading {prefix}: {e}", log_type="error")
+            logger.error(f"Error downloading {prefix}: {e}")
             if attempt < max_retries - 1:
                 time.sleep(retry_delay)
                 retry_delay *= 2
@@ -319,11 +330,11 @@ def send_webhook_message(webhook_url: str, thread_id: str | None = None, **kwarg
         webhook.send(**kwargs)
         return True, False
     except discord.HTTPException as e:
-        log_message(f"Discord HTTP Exception: {e}", log_type="error")
+        logger.error(f"Discord HTTP Exception: {e}")
         is_payload_too_large = (e.status == 413)
         return False, is_payload_too_large
     except Exception as e:
-        log_message(f"Error sending message to Discord: {e}", log_type="error")
+        logger.error(f"Error sending message to Discord: {e}")
         return False, False
 
 def download_media_concurrently(media_list: list[tuple[str, str]]) -> list[tuple[str, bytes | None, str | None]]:
@@ -339,7 +350,7 @@ def download_media_concurrently(media_list: list[tuple[str, str]]) -> list[tuple
                 data, filename = download_video(url, index)
             return url, data, filename
         except Exception as e:
-            log_message(f"Concurrent download error for {url}: {e}", log_type="error")
+            logger.error(f"Concurrent download error for {url}: {e}")
             return url, None, None
             
     indexed_media_list = [(i, item[0], item[1]) for i, item in enumerate(media_list)]
@@ -348,116 +359,187 @@ def download_media_concurrently(media_list: list[tuple[str, str]]) -> list[tuple
         results = list(executor.map(download_one, indexed_media_list))
     return results
 
-def sendMessage(msg_link: str, msg_text: str | None, media_items: list[dict], 
+def sendMessage(channel: str, message_ids: list[int], msg_link: str, msg_text: str | None, media_items: list[dict], 
                 author_name: str, icon_url: str | None, timestamp: datetime.datetime | None = None,
-                documents: list[str] | None = None) -> None:
+                documents: list[str] | None = None, forward_info: dict | None = None, reply_info: dict | None = None) -> None:
     """Send a Telegram message to Discord webhook using Components V2 (with thread support)."""
-    # 1. Build the list of media to download
-    download_list = []
-    for item in media_items:
-        if item['type'] in ('image', 'video'):
-            download_list.append((item['type'], item['url']))
-        elif item['type'] == 'video_too_large':
-            download_list.append(('image', item['url']))
-            
     # Capped at first 10 items since Discord CV2 gallery limit is 10
     media_items = media_items[:10]
+    message_ids = message_ids[:10]
     
-    # 2. Download concurrently
-    downloaded_map = {}
-    if download_list:
-        log_message(f"Downloading {len(download_list)} media files concurrently...", log_type="status2")
-        downloaded_results = download_media_concurrently(download_list)
-        for url, data, filename in downloaded_results:
-            downloaded_map[url] = (data, filename)
+    # 2. Download concurrently via Telethon
+    from telethon_client import get_telethon_media, TELETHON_CONFIGURED
+    
+    telethon_results = []
+    if TELETHON_CONFIGURED and (media_items or documents):
+        try:
+            logger.debug(f"Fetching original high-quality media via Telethon for message {message_ids}...")
+            telethon_results = get_telethon_media(channel, message_ids)
+        except Exception as e:
+            logger.debug(f"Telethon fetch failed: {e}")
+            telethon_results = []
+            
+    if not telethon_results and media_items:
+        logger.debug("Telethon media fetch skipped or failed. Falling back to HTML scraping...")
+        download_list = []
+        for item in media_items:
+            if item['type'] in ('image', 'video'):
+                download_list.append((item['type'], item['url']))
+            elif item['type'] == 'video_too_large':
+                download_list.append(('image', item['url']))
+                
+        downloaded_map = {}
+        if download_list:
+            logger.debug(f"Downloading {len(download_list)} media files concurrently via HTML...")
+            downloaded_results = download_media_concurrently(download_list)
+            for url, data, filename in downloaded_results:
+                downloaded_map[url] = (data, filename)
+                
+        for item in media_items:
+            itype = item['type']
+            url = item['url']
+            data, filename = downloaded_map.get(url, (None, None))
+            telethon_results.append({
+                'type': itype,
+                'data': data,
+                'filename': filename,
+                'is_spoiler': False,
+                'is_too_large': (itype == 'video_too_large')
+            })
             
     # 3. Build files list and gallery items
     files = []
     gallery_items = []
+    ui_files = []
     media_status = []
     
-    for item in media_items:
+    # If telethon couldn't fetch anything, fallback to HTML scraping is practically non-existent for high quality,
+    # but we'll try to map the results we got.
+    
+    for idx, item in enumerate(telethon_results):
         itype = item['type']
-        url = item['url']
+        is_too_large = item['is_too_large']
+        file_bytes = item['data']
+        filename = item['filename']
+        is_spoiler = item.get('is_spoiler', False)
         
-        if itype == 'video_too_large':
-            duration = item.get('duration', '0:00')
-            data, filename = downloaded_map.get(url, (None, None))
-            if data and filename:
-                files.append(File(io.BytesIO(data), filename=filename))
-                gallery_items.append(discord.MediaGalleryItem(f"attachment://{filename}", description=f"Media is too big ({duration})"))
-                media_status.append({
-                    'type': itype,
-                    'url': url,
-                    'duration': duration,
-                    'data': data,
-                    'filename': filename,
-                    'attached': True
-                })
-            else:
-                gallery_items.append(discord.MediaGalleryItem(url, description=f"Media is too big ({duration})"))
-                media_status.append({
-                    'type': itype,
-                    'url': url,
-                    'duration': duration,
-                    'data': None,
-                    'filename': None,
-                    'attached': False
-                })
+        if is_spoiler and filename and not filename.startswith('SPOILER_'):
+            filename = 'SPOILER_' + filename
+        
+        duration = None
+        fallback_url = None
+        if idx < len(media_items):
+            fallback_url = media_items[idx]['url']
+            duration = media_items[idx].get('duration', None)
+            
+        dur_str = f" ({duration})" if duration and duration != 'Too large' else ""
+            
+        if is_too_large:
+            if fallback_url:
+                thumb_bytes, thumb_filename = download_image(fallback_url)
+                desc_label = f"Media is too big{dur_str}"
+                
+                if thumb_bytes and thumb_filename:
+                    files.append(File(io.BytesIO(thumb_bytes), filename=thumb_filename))
+                    gallery_items.append(discord.MediaGalleryItem(f"attachment://{thumb_filename}", description=desc_label, spoiler=is_spoiler))
+                    media_status.append({
+                        'type': 'video_too_large',
+                        'url': fallback_url,
+                        'duration': duration,
+                        'data': thumb_bytes,
+                        'filename': thumb_filename,
+                        'attached': True
+                    })
+                else:
+                    gallery_items.append(discord.MediaGalleryItem(fallback_url, description=desc_label, spoiler=is_spoiler))
+                    media_status.append({
+                        'type': 'video_too_large',
+                        'url': fallback_url,
+                        'duration': duration,
+                        'data': None,
+                        'filename': None,
+                        'attached': False
+                    })
         else:
-            data, filename = downloaded_map.get(url, (None, None))
-            if data and filename:
-                files.append(File(io.BytesIO(data), filename=filename))
-                gallery_items.append(discord.MediaGalleryItem(f"attachment://{filename}"))
+            if file_bytes and filename:
+                files.append(File(io.BytesIO(file_bytes), filename=filename))
+                if itype in ['image', 'video']:
+                    gallery_items.append(discord.MediaGalleryItem(f"attachment://{filename}", spoiler=is_spoiler))
+                else:
+                    ui_files.append(UIFile(f"attachment://{filename}"))
                 media_status.append({
                     'type': itype,
-                    'url': url,
-                    'data': data,
+                    'url': fallback_url or '',
+                    'duration': duration,
+                    'data': file_bytes,
                     'filename': filename,
                     'attached': True
-                })
-            else:
-                gallery_items.append(discord.MediaGalleryItem(url))
-                media_status.append({
-                    'type': itype,
-                    'url': url,
-                    'data': None,
-                    'filename': None,
-                    'attached': False
                 })
             
     try:
         # Format timestamp
         unix_time = int(timestamp.timestamp()) if timestamp else int(time.time())
         time_str = f" at <t:{unix_time}:f>"
+        link_label = author_name if author_name else channel
         
         doc_str = ""
         if documents:
             doc_str = "-# Attached file(s): " + ", ".join([f"`{doc}`" for doc in documents])
             
+        main_text_parts = []
         if msg_text:
-            if doc_str:
-                text_content = f"{msg_text}\n\n{doc_str}\n-# [Message Link](<{msg_link}>){time_str}"
-            else:
-                text_content = f"{msg_text}\n\n-# [Message Link](<{msg_link}>){time_str}"
-        else:
-            if doc_str:
-                text_content = f"{doc_str}\n-# [Message Link](<{msg_link}>){time_str}"
-            else:
-                text_content = f"-# [Message Link](<{msg_link}>){time_str}"
-                
-        text_disp = TextDisplay(text_content)
+            main_text_parts.append(msg_text)
+        if doc_str:
+            main_text_parts.append(doc_str)
+            
+        from discord.ui import Separator
         
-        # Construct layout container
-        container = Container(text_disp, accent_color=EMBED_COLOR)
+        container_items = []
+        
+        if main_text_parts:
+            text_disp = TextDisplay("\n\n".join(main_text_parts))
+            container_items.append(text_disp)
+            
         if gallery_items:
             gallery = MediaGallery(*gallery_items)
-            container.add_item(gallery)
+            container_items.append(gallery)
+            
+        for uf in ui_files:
+            container_items.append(uf)
+            
+        # Metadata logic
+        meta_parts = []
+        author_link = f"[{link_label}](<{msg_link}>)"
+        
+        if forward_info:
+            fwd_name = forward_info['name']
+            fwd_href = forward_info['href']
+            fwd_link = f"[{fwd_name}](<{fwd_href}>)" if fwd_href else f"[{fwd_name}]"
+            meta_parts.append(f"-# {author_link} forwarded {fwd_link}{time_str}")
+        elif reply_info:
+            reply_href = reply_info['href']
+            reply_link = f"[Message](<{reply_href}>)" if reply_href else "[Message]"
+            reply_text = reply_info['text']
+            if len(reply_text) > 80:
+                reply_text = reply_text[:77] + "..."
+            reply_text = reply_text.replace('\n', ' ')
+            meta_parts.append(f"-# {author_link} replying to a {reply_link}{time_str}\n-# > {reply_text}")
+        else:
+            meta_parts.append(f"-# {author_link}{time_str}")
+            
+        meta_text_disp = TextDisplay("\n".join(meta_parts))
+        
+        if container_items:
+            container_items.append(Separator(visible=False))
+            
+        container_items.append(meta_text_disp)
+        
+        container = Container(*container_items, accent_color=EMBED_COLOR)
             
         view = LayoutView()
         view.add_item(container)
         
-        log_message(f"Sending message to Discord: {msg_link}", log_type="new_message")
+        logger.info(f"Sending message to Discord: {msg_link}")
         
         kwargs = {
             'username': author_name,
@@ -471,36 +553,68 @@ def sendMessage(msg_link: str, msg_text: str | None, media_items: list[dict],
         
         # Targeted video fallback on HTTP 413 (Payload Too Large)
         if not success and too_large:
-            log_message("Payload too large, applying targeted video fallback (replacing videos with CDN URLs)...", log_type="new_message")
+            log_message("Payload too large, applying targeted video fallback (downloading video thumbnails and re-uploading to Discord)...", log_type="new_message")
             
-            # Streams are dynamically generated from raw bytes, no need to reset seek(0)
-                    
             fallback_files = []
             fallback_gallery_items = []
             
             for item in media_status:
                 itype = item['type']
+                url = item.get('url', '')
+                dur = item.get('duration')
+                dur_str = f" ({dur})" if dur and dur != 'Too large' else ""
+                
                 if item['attached']:
                     if itype == 'video':
-                        video_size = len(item['data'])
+                        video_size = len(item['data']) if item['data'] else 0
                         if video_size > 10 * 1024 * 1024:
-                            log_message(f"Video {item['filename']} is too large ({video_size / (1024*1024):.2f} MB), replacing with CDN URL.", log_type="new_message")
-                            fallback_gallery_items.append(discord.MediaGalleryItem(item['url']))
+                            logger.info(f"Video {item['filename']} is too large ({video_size / (1024*1024):.2f} MB), downloading thumbnail for re-upload...", log_type="new_message")
+                            thumb_bytes, thumb_filename = download_image(url)
+                            desc_label = f"Media is too big{dur_str}"
+                            if thumb_bytes and thumb_filename:
+                                fallback_files.append(File(io.BytesIO(thumb_bytes), filename=thumb_filename))
+                                fallback_gallery_items.append(discord.MediaGalleryItem(f"attachment://{thumb_filename}", description=desc_label))
+                            else:
+                                fallback_gallery_items.append(discord.MediaGalleryItem(url, description=desc_label))
                             continue
                     fallback_files.append(File(io.BytesIO(item['data']), filename=item['filename']))
                     if itype == 'video_too_large':
-                        fallback_gallery_items.append(discord.MediaGalleryItem(f"attachment://{item['filename']}", description=f"Media is too big ({item['duration']})"))
+                        fallback_gallery_items.append(discord.MediaGalleryItem(f"attachment://{item['filename']}", description=f"Media is too big{dur_str}"))
                     else:
                         fallback_gallery_items.append(discord.MediaGalleryItem(f"attachment://{item['filename']}"))
                 elif itype == 'video_too_large':
-                    fallback_gallery_items.append(discord.MediaGalleryItem(item['url'], description=f"Media is too big ({item['duration']})"))
+                    thumb_bytes, thumb_filename = download_image(url)
+                    desc_label = f"Media is too big{dur_str}"
+                    if thumb_bytes and thumb_filename:
+                        fallback_files.append(File(io.BytesIO(thumb_bytes), filename=thumb_filename))
+                        fallback_gallery_items.append(discord.MediaGalleryItem(f"attachment://{thumb_filename}", description=desc_label))
+                    else:
+                        fallback_gallery_items.append(discord.MediaGalleryItem(url, description=desc_label))
                 else:
-                    fallback_gallery_items.append(discord.MediaGalleryItem(item['url']))
+                    thumb_bytes, thumb_filename = download_image(url)
+                    if thumb_bytes and thumb_filename:
+                        fallback_files.append(File(io.BytesIO(thumb_bytes), filename=thumb_filename))
+                        fallback_gallery_items.append(discord.MediaGalleryItem(f"attachment://{thumb_filename}"))
+                    else:
+                        fallback_gallery_items.append(discord.MediaGalleryItem(url))
                     
-            fallback_container = Container(text_disp, accent_color=EMBED_COLOR)
+            fallback_items = []
+            if main_text_parts:
+                fallback_items.append(TextDisplay("\n\n".join(main_text_parts)))
+            
             if fallback_gallery_items:
                 fallback_gallery = MediaGallery(*fallback_gallery_items)
-                fallback_container.add_item(fallback_gallery)
+                fallback_items.append(fallback_gallery)
+                
+            for uf in ui_files:
+                fallback_items.append(uf)
+                
+            if fallback_items:
+                fallback_items.append(Separator(visible=False))
+            
+            fallback_items.append(meta_text_disp)
+            
+            fallback_container = Container(*fallback_items, accent_color=EMBED_COLOR)
                 
             fallback_view = LayoutView()
             fallback_view.add_item(fallback_container)
@@ -523,10 +637,10 @@ def sendMessage(msg_link: str, msg_text: str | None, media_items: list[dict],
                 content_parts.append(msg_text)
             for item in media_status:
                 content_parts.append(item['url'])
-            content_parts.append(f"[Message Link](<{msg_link}>) at <t:{unix_time}:f>")
+            content_parts.append("\n".join(meta_parts))
             fallback_content = "\n\n".join(content_parts)
             if len(fallback_content) > 4000:
-                link_part = f"[Message Link](<{msg_link}>) at <t:{unix_time}:f>"
+                link_part = "\n".join(meta_parts)
                 allowed_len = 4000 - len(link_part) - 10
                 rest = "\n\n".join(content_parts[:-1])
                 fallback_content = rest[:allowed_len] + "...\n\n" + link_part
@@ -538,24 +652,25 @@ def sendMessage(msg_link: str, msg_text: str | None, media_items: list[dict],
                 content=fallback_content
             )
             if not success:
-                log_message("Failed to send plain text fallback", log_type="error")
+                logger.error("Failed to send plain text fallback")
                 return
                 
-        log_message("Message sent successfully.", log_type="new_message")
+        logger.info("Message sent successfully.")
     except Exception as e:
-        log_message(f"Error preparing or sending message to Discord: {e}", log_type="error")
+        logger.error(f"Error preparing or sending message to Discord: {e}")
 
-def main(tg_channel: str) -> None:
+def main(channels: list[str]) -> None:
     SCRIPT_START_TIME = datetime.datetime.now()
-    msg_log = []
-    last_processed_number = 0
-    grouped_media_ranges = set()
-    log_message(f"Starting bot for channel: {tg_channel}", log_type="status2")
-
-    while True:
+    
+    for tg_channel in channels:
+        msg_log = []
+        last_processed_number = 0
+        grouped_media_ranges = set()
+        logger.debug(f"Starting bot for channel: {tg_channel}")
+        
         try:
             msg_temp = []
-            log_message("Checking for new messages...", log_type="status2")
+            logger.debug("Checking for new messages...")
             message_boxes = scrapeTelegramMessageBox(tg_channel)
             if not message_boxes:
                 continue
@@ -574,13 +689,13 @@ def main(tg_channel: str) -> None:
                 timestamp = getTimestamp(tg_box)
 
                 if current_number in grouped_media_ranges:
-                    log_message(f"Skipping grouped media component: {msg_link}", log_type="status2")
+                    logger.debug(f"Skipping grouped media component: {msg_link}")
                     msg_temp.append(msg_link)
                     last_processed_number = current_number
                     continue
 
                 if is_message_logged(tg_channel, current_number):
-                    log_message(f"Skipping already logged message: {msg_link}", log_type="status2")
+                    logger.debug(f"Skipping already logged message: {msg_link}")
                     continue
 
                 msg_text = getText(tg_box)
@@ -589,21 +704,39 @@ def main(tg_channel: str) -> None:
                 total_media = len(media_items)
                 
                 if total_media > 1 and not msg_text:
-                    log_message(f"Grouped media detected with no text, trying individual message URL: {msg_link}", log_type="status2")
+                    logger.debug(f"Grouped media detected with no text, trying individual message URL: {msg_link}")
                     msg_text = getTextFromIndividualMessage(msg_link)
                     if msg_text:
-                        log_message(f"Successfully extracted text from meta tags: '{msg_text[:50]}...'", log_type="status2")
+                        logger.debug(f"Successfully extracted text from meta tags: '{msg_text[:50]}...'")
+
+                if not msg_text and tg_box.find(class_='message_media_not_supported'):
+                    import os
+                    if os.getenv("TG_SESSION_STRING"):
+                        logger.debug(f"Text hidden (View in Telegram), fetching via Telethon for {msg_link}")
+                        try:
+                            from telethon_client import get_telethon_text
+                            fetched_text = get_telethon_text(tg_channel, current_number)
+                            if fetched_text:
+                                msg_text = fetched_text
+                                logger.debug(f"Successfully extracted text via Telethon: '{msg_text[:50]}...'")
+                        except Exception as e:
+                            logger.error(f"Failed to fetch text via Telethon: {e}")
 
                 if msg_link not in msg_log:
-                    log_message(f"New message found: {msg_link}", log_type="new_message")
+                    logger.info(f"New message sent: {msg_link}")
                     msg_temp.append(msg_link)
                     
+                    message_ids = [current_number + i for i in range(total_media)] if total_media > 1 else [current_number]
+                    
                     if total_media > 1:
-                        log_message(f"Marking grouped media range: {current_number} + {total_media-1} components", log_type="status2")
+                        logger.debug(f"Marking grouped media range: {current_number} + {total_media-1} components")
                         for i in range(1, total_media):
                             grouped_media_ranges.add(current_number + i)
+                            
+                    forward_info = getForwardInfo(tg_box)
+                    reply_info = getReplyInfo(tg_box)
                     
-                    sendMessage(msg_link, msg_text, media_items, author_name, icon_url, timestamp=timestamp, documents=documents)
+                    sendMessage(tg_channel, message_ids, msg_link, msg_text, media_items, author_name, icon_url, timestamp=timestamp, documents=documents, forward_info=forward_info, reply_info=reply_info)
 
                 msg_temp.append(msg_link)
                 last_processed_number = current_number
@@ -611,15 +744,21 @@ def main(tg_channel: str) -> None:
             msg_log = msg_temp
             current_time = datetime.datetime.now()
             time_passed = current_time - SCRIPT_START_TIME
-            log_message(f"Bot working for {tg_channel}. Time passed: {time_passed}", log_type="status")
+            logger.debug(f"Bot finished pass for {tg_channel}. Time passed: {time_passed}")
         except Exception as e:
-            log_message(f"[   E R R O R   ]\n{e}\nScript ignored the error and keeps running.", log_type="error")
-        time.sleep(COOLDOWN)
+            logger.error(f"Error processing channel {tg_channel}: {e}")
+            
+    import gc
+    gc.collect()
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        log_message("Usage: python webhook.py <TG_CHANNEL>", log_type="status2") 
+    if len(sys.argv) < 2 or len(sys.argv) > 3:
+        print("Usage: python webhook.py <channel1,channel2,...> [worker_id]")
         sys.exit(1)
-    TG_CHANNEL = sys.argv[1]
-    log_message(f"Initializing bot with channel: {TG_CHANNEL}", log_type="status2")
-    main(TG_CHANNEL)
+    channels = sys.argv[1].split(",")
+    worker_id = sys.argv[2] if len(sys.argv) == 3 else "0"
+    
+    from logging_config import configure_logging
+    configure_logging(process_name=f"worker-{worker_id}")
+    
+    main(channels)
